@@ -63,7 +63,7 @@ function sectionHasRestartPending(section: ConfigSection): boolean {
 }
 
 const restartBadgeHint =
-  '当前修改尚未写入配置文件。「需重启」仅表示生效方式；若未先保存，单独重启推理服务不会应用这些数值。'
+  '保存当前配置，然后重启 inference 推理服务，使配置生效'
 
 onMounted(async () => {
   await store.fetchOne(characterId.value).catch(() => {})

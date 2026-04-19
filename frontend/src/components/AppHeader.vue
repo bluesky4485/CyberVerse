@@ -72,11 +72,26 @@ withDefaults(defineProps<{
         <span class="w-2 h-2 rounded-full" :class="serviceConnected ? 'bg-cv-success' : 'bg-cv-danger'" />
         <span class="text-cv-text-secondary">{{ serviceConnected ? '推理服务已连接' : '推理服务未连接' }}</span>
       </div>
-      <button @click="router.push('/settings')"
+      <button type="button"
+              aria-label="系统设置"
+              @click="router.push('/settings')"
               class="w-8 h-8 flex items-center justify-center rounded-cv-md text-cv-text-secondary hover:text-cv-text hover:bg-cv-hover transition-all cursor-pointer">
-        <svg class="w-[18px] h-[18px]" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="10" cy="10" r="3" />
-          <path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.5 3.5l1.5 1.5M15 15l1.5 1.5M16.5 3.5L15 5M5 15l-1.5 1.5" stroke-linecap="round" />
+        <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+          <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+          <path d="M12 2v2" />
+          <path d="M12 22v-2" />
+          <path d="m17 20.66-1-1.73" />
+          <path d="M11 10.27 7 3.34" />
+          <path d="m20.66 17-1.73-1" />
+          <path d="m3.34 7 1.73 1" />
+          <path d="M14 12h8" />
+          <path d="M2 12h2" />
+          <path d="m20.66 7-1.73 1" />
+          <path d="m3.34 17 1.73-1" />
+          <path d="m17 3.34-1 1.73" />
+          <path d="m11 13.73-4 6.93" />
         </svg>
       </button>
     </div>
