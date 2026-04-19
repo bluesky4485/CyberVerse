@@ -23,7 +23,6 @@ def _config(*, warmup_enabled: bool) -> PluginConfig:
             "block_offload": False,
             "mean_memory": False,
             "default_prompt": "一个人在说话",
-            "default_avatar_image": "models/SoulX-LiveAct/examples/image/1.png",
             "ckpt_dir": "/tmp/liveact",
             "wav2vec_dir": "/tmp/wav2vec",
         },
@@ -44,7 +43,7 @@ def test_init_sync_runs_warmup_after_avatar_setup():
         with patch.object(plugin, "_init_kv_cache"):
             with patch.object(
                 plugin,
-                "_resolve_default_avatar_path",
+                "_create_default_avatar_placeholder",
                 return_value=("/tmp/avatar.png", False),
             ):
                 with patch.object(
@@ -74,7 +73,7 @@ def test_init_sync_skips_warmup_when_disabled():
         with patch.object(plugin, "_init_kv_cache"):
             with patch.object(
                 plugin,
-                "_resolve_default_avatar_path",
+                "_create_default_avatar_placeholder",
                 return_value=("/tmp/avatar.png", False),
             ):
                 with patch.object(

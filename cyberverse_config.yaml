@@ -30,9 +30,6 @@ inference:
             world_size: 2
             device: "cuda:0"
             seed: 9999
-            # 相对路径相对于启动推理服务时的进程工作目录（仓库根目录执行 make inference 时即仓库根）
-            default_avatar_image: "examples/girl.png"
-            default_avatar_use_face_crop: false
         live_act:
             plugin_class: "inference.plugins.avatar.live_act_plugin.LiveActAvatarPlugin"
             models_dir: "models/SoulX-LiveAct"
@@ -51,7 +48,6 @@ inference:
             world_size: 2
             compile_wan_model: false
             compile_vae_decode: false
-            default_avatar_image: "models/SoulX-LiveAct/examples/image/1.png"
             default_prompt: "一个人在说话"
 
     voice_llm:

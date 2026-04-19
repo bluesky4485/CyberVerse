@@ -305,10 +305,10 @@ class LiveActAvatarPlugin(AvatarPlugin):
         self._load_models(config)
         self._init_kv_cache()
 
-        # Default avatar
+        # Use a gray placeholder avatar for initialization and warmup.
         base_seed = self._seed
         try:
-            image_path, is_temp = self._resolve_default_avatar_path(config)
+            image_path, is_temp = self._create_default_avatar_placeholder()
             self._default_avatar_path = image_path
             self._default_avatar_is_temp = is_temp
             self._set_avatar_sync_local(image_path)
@@ -658,17 +658,7 @@ class LiveActAvatarPlugin(AvatarPlugin):
 
     # ── Avatar setup ──────────────────────────────────────────────────────
 
-    def _resolve_default_avatar_path(self, config: PluginConfig) -> tuple[str, bool]:
-        raw = (config.params.get("default_avatar_image") or "").strip()
-        if not raw:
-            raw = "models/SoulX-LiveAct/examples/image/1.png"
-        p = Path(raw)
-        if not p.is_absolute():
-            p = (Path.cwd() / p).resolve()
-        if p.is_file():
-            return str(p), False
-
-        logger.warning("default_avatar_image not found (%s), using gray placeholder", p)
+    def _create_default_avatar_placeholder(self) -> tuple[str, bool]:
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         tmp_path = tmp.name
         tmp.close()

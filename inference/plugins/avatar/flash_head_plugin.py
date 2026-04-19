@@ -142,18 +142,7 @@ class FlashHeadAvatarPlugin(AvatarPlugin):
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._init_sync, config)
 
-    def _resolve_default_avatar_image_path(self, config: PluginConfig) -> tuple[str, bool]:
-        raw = (config.params.get("default_avatar_image") or "examples/girl.png").strip()
-        p = Path(raw)
-        if not p.is_absolute():
-            p = (Path.cwd() / p).resolve()
-        if p.is_file():
-            return str(p), False
-
-        logger.warning(
-            "default_avatar_image not found (%s), using gray placeholder",
-            p,
-        )
+    def _create_default_avatar_placeholder(self) -> tuple[str, bool]:
         height = int(self.infer_params["height"])
         width = int(self.infer_params["width"])
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
@@ -214,12 +203,10 @@ class FlashHeadAvatarPlugin(AvatarPlugin):
             os.environ.get("FLASHHEAD_DIST_WORKER_MAIN_THREAD", "0") == "1"
         )
 
-        # Default condition image from config (path relative to cwd unless absolute).
-        # Falls back to a gray placeholder if the file is missing.
+        # Use a gray placeholder avatar for initialization and warmup.
         base_seed = int(config.params.get("seed", 9999))
-        use_face_crop = bool(config.params.get("default_avatar_use_face_crop", False))
         try:
-            image_path, is_temp_image = self._resolve_default_avatar_image_path(config)
+            image_path, is_temp_image = self._create_default_avatar_placeholder()
             self._default_avatar_path = image_path
             self._default_avatar_is_temp = is_temp_image
 
@@ -227,7 +214,7 @@ class FlashHeadAvatarPlugin(AvatarPlugin):
                 self.pipeline,
                 image_path,
                 base_seed=base_seed,
-                use_face_crop=use_face_crop,
+                use_face_crop=False,
             )
             self._avatar_initialized = True
             device = getattr(self.pipeline, "device", None)
@@ -239,7 +226,7 @@ class FlashHeadAvatarPlugin(AvatarPlugin):
                 config.params["wav2vec_dir"],
                 image_path,
                 base_seed,
-                use_face_crop,
+                False,
                 device,
                 self._world_size,
             )

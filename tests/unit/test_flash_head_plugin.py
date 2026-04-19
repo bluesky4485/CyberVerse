@@ -137,7 +137,6 @@ def test_init_sync_runs_warmup_when_enabled():
             "checkpoint_dir": "/tmp/ckpt",
             "wav2vec_dir": "/tmp/wav2vec",
             "model_type": "lite",
-            "default_avatar_image": "examples/girl.png",
         },
         shared={
             "warmup": {
@@ -154,7 +153,7 @@ def test_init_sync_runs_warmup_when_enabled():
     ):
         with patch.object(
             plugin,
-            "_resolve_default_avatar_image_path",
+            "_create_default_avatar_placeholder",
             return_value=("/tmp/avatar.png", False),
         ):
             with patch.object(plugin, "_warmup") as warmup:
@@ -173,7 +172,6 @@ def test_init_sync_skips_warmup_when_disabled():
             "checkpoint_dir": "/tmp/ckpt",
             "wav2vec_dir": "/tmp/wav2vec",
             "model_type": "lite",
-            "default_avatar_image": "examples/girl.png",
         },
         shared={
             "warmup": {
@@ -190,7 +188,7 @@ def test_init_sync_skips_warmup_when_disabled():
     ):
         with patch.object(
             plugin,
-            "_resolve_default_avatar_image_path",
+            "_create_default_avatar_placeholder",
             return_value=("/tmp/avatar.png", False),
         ):
             with patch.object(plugin, "_warmup") as warmup:

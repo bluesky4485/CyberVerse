@@ -230,11 +230,9 @@ var paramMeta = map[string]struct {
 	Hidden   bool
 	Options  []string
 }{
-	"plugin_class":                 {Readonly: true, Hidden: true},
-	"models_dir":                   {Readonly: true, Hidden: true},
-	"default_avatar_image":         {Readonly: true, Hidden: true},
-	"default_avatar_use_face_crop": {Readonly: true, Hidden: true},
-	"model_type":                   {Options: []string{"pro", "lite"}},
+	"plugin_class": {Readonly: true, Hidden: true},
+	"models_dir":   {Readonly: true, Hidden: true},
+	"model_type":   {Options: []string{"pro", "lite"}},
 }
 
 // GPU-related keys are shown in a separate section.
