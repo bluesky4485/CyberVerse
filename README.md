@@ -116,8 +116,8 @@ pip install "huggingface_hub[cli]"
 
 | Model Component | Description | Link |
 | :--- | :--- | :--- |
-| `SoulX-FlashHead-1_3B` | 1.3B FlashHead weights | [Hugging Face](https://huggingface.co/Soul-AILab/SoulX-FlashHead-1_3B) |
-| `wav2vec2-base-960h` | Audio feature extractor | [Hugging Face](https://huggingface.co/facebook/wav2vec2-base-960h) |
+| `SoulX-FlashHead-1_3B` | 1.3B FlashHead weights | [Hugging Face](https://huggingface.co/Soul-AILab/SoulX-FlashHead-1_3B), [ModelScope](https://modelscope.cn/models/Soul-AILab/SoulX-FlashHead-1_3B) |
+| `wav2vec2-base-960h` | Audio feature extractor | [Hugging Face](https://huggingface.co/facebook/wav2vec2-base-960h), [ModelScope](https://modelscope.cn/models/facebook/wav2vec2-base-960h) |
 
 ```bash
 # If you are in mainland China, you can use a mirror first:
@@ -135,7 +135,7 @@ huggingface-cli download facebook/wav2vec2-base-960h \
 | ModelName | Download |
 |-----------|----------|
 | SoulX-LiveAct | [Hugging Face](https://huggingface.co/Soul-AILab/LiveAct), [ModelScope](https://modelscope.cn/models/Soul-AILab/LiveAct) |
-| chinese-wav2vec2-base | [Hugging Face](https://huggingface.co/TencentGameMate/chinese-wav2vec2-base) |
+| chinese-wav2vec2-base | [Hugging Face](https://huggingface.co/TencentGameMate/chinese-wav2vec2-base), [ModelScope](https://modelscope.cn/models/TencentGameMate/chinese-wav2vec2-base) |
 
 ```bash
 huggingface-cli download Soul-AILab/LiveAct \
@@ -153,6 +153,7 @@ Edit `cyberverse_config.yaml`, update the model paths to match your local checkp
 ```yaml
 inference:
   avatar:
+    default: "flash_head"               # selects which avatar model to start; if set to live_act, fill the live_act section below
     runtime:
       cuda_visible_devices: 0      # shared GPU ID(s), e.g. 0,1 for multi-GPU
       world_size: 1                # shared GPU count, set to 2 for dual-GPU

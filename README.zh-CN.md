@@ -116,7 +116,7 @@ pip install "huggingface_hub[cli]"
 | 模型组件 | 说明 | 链接 |
 | :--- | :--- | :--- |
 | `SoulX-FlashHead-1_3B` | 1.3B FlashHead 权重 | [Hugging Face](https://huggingface.co/Soul-AILab/SoulX-FlashHead-1_3B) |
-| `wav2vec2-base-960h` | 音频特征提取器 | [Hugging Face](https://huggingface.co/facebook/wav2vec2-base-960h) |
+| `wav2vec2-base-960h` | 音频特征提取器 | [Hugging Face](https://huggingface.co/facebook/wav2vec2-base-960h), [ModelScope](https://modelscope.cn/models/facebook/wav2vec2-base-960h) |
 
 ```bash
 # 如果你在中国大陆，可以先使用镜像：
@@ -134,7 +134,7 @@ huggingface-cli download facebook/wav2vec2-base-960h \
 | 模型名称 | 下载 |
 |-----------|----------|
 | SoulX-LiveAct | [Hugging Face](https://huggingface.co/Soul-AILab/LiveAct), [ModelScope](https://modelscope.cn/models/Soul-AILab/LiveAct) |
-| chinese-wav2vec2-base | [Hugging Face](https://huggingface.co/TencentGameMate/chinese-wav2vec2-base) |
+| chinese-wav2vec2-base | [Hugging Face](https://huggingface.co/TencentGameMate/chinese-wav2vec2-base), [ModelScope](https://modelscope.cn/models/TencentGameMate/chinese-wav2vec2-base) |
 
 ```bash
 huggingface-cli download Soul-AILab/LiveAct \
@@ -152,6 +152,7 @@ huggingface-cli download TencentGameMate/chinese-wav2vec2-base \
 ```yaml
 inference:
   avatar:
+    default: "flash_head"               # 指定启动的数字人模型；若设为 live_act，请填写下方 live_act 配置
     runtime:
       cuda_visible_devices: 0      # 共享 GPU ID，例如多卡可写 0,1
       world_size: 1                # 共享 GPU 数量，双卡时设为 2
