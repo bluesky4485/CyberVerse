@@ -42,6 +42,8 @@ const voiceError = ref('')
 const testingVoice = ref(false)
 const voiceTestStatus = ref<'success' | 'error' | null>(null)
 const voiceTestMessage = ref('')
+const OFFICIAL_VOICE_PREVIEW_URL = 'https://console.volcengine.com/speech/new/experience/call'
+const CUSTOM_VOICE_CLONE_URL = 'https://console.volcengine.com/speech/new/experience/clone'
 
 const visibleImages = computed(() =>
   images.value.filter(img => !deletedImageFilenames.value.has(img.filename))
@@ -416,10 +418,22 @@ const breadcrumb = computed(() =>
                 check
               </button>
             </div>
+            <p v-if="voiceMode === 'official'" class="mt-2 text-[11px] leading-5 text-cv-text-muted">
+              可到
+              <a
+                :href="OFFICIAL_VOICE_PREVIEW_URL"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline underline-offset-2 transition-colors hover:text-cv-text"
+              >
+                火山引擎语音克隆控制台
+              </a>
+              试听音色
+            </p>
             <p v-if="voiceMode === 'custom'" class="mt-2 text-[11px] leading-5 text-cv-text-muted">
               请先前往
               <a
-                href="https://console.volcengine.com/speech/new/experience/clone"
+                :href="CUSTOM_VOICE_CLONE_URL"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="underline underline-offset-2 transition-colors hover:text-cv-text"
