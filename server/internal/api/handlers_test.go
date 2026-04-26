@@ -29,24 +29,29 @@ func newTestCharStore(t *testing.T) *character.Store {
 }
 
 func newTestRouter() *Router {
-	mgr := orchestrator.NewSessionManager(4)
-	hub := ws.NewHub()
-	// Use a temp dir for charStore in tests
-	dir, _ := os.MkdirTemp("", "chartest-*")
-	cs, _ := character.NewStore(dir)
-	orch := orchestrator.New(&fakeInferenceService{
+	return newTestRouterWithInference(&fakeInferenceService{
 		avatarInfo: &pb.AvatarInfo{ModelName: "avatar.flash_head", OutputFps: 25},
-	}, hub, mgr, nil, cs)
-	return NewRouter(mgr, orch, hub, nil, nil, cs, "", "")
+	})
 }
 
 func newTestRouterWithMgr(mgr *orchestrator.SessionManager) *Router {
+	return newTestRouterWithMgrAndInference(mgr, &fakeInferenceService{
+		avatarInfo: &pb.AvatarInfo{ModelName: "avatar.flash_head", OutputFps: 25},
+	})
+}
+
+func newTestRouterWithInference(inf *fakeInferenceService) *Router {
+	return newTestRouterWithMgrAndInference(orchestrator.NewSessionManager(4), inf)
+}
+
+func newTestRouterWithMgrAndInference(mgr *orchestrator.SessionManager, inf *fakeInferenceService) *Router {
 	hub := ws.NewHub()
 	dir, _ := os.MkdirTemp("", "chartest-*")
 	cs, _ := character.NewStore(dir)
-	orch := orchestrator.New(&fakeInferenceService{
-		avatarInfo: &pb.AvatarInfo{ModelName: "avatar.flash_head", OutputFps: 25},
-	}, hub, mgr, nil, cs)
+	if inf.avatarInfo == nil {
+		inf.avatarInfo = &pb.AvatarInfo{ModelName: "avatar.flash_head", OutputFps: 25}
+	}
+	orch := orchestrator.New(inf, hub, mgr, nil, cs)
 	return NewRouter(mgr, orch, hub, nil, nil, cs, "", "")
 }
 
@@ -83,9 +88,6 @@ func TestCreateSession(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.SessionID == "" {
 		t.Error("expected non-empty session_id")
-	}
-	if resp.TextInputEnabled {
-		t.Error("expected text input to be disabled when QWEN_API_KEY is not configured")
 	}
 }
 
@@ -151,7 +153,6 @@ func TestDeleteSessionNotFound(t *testing.T) {
 }
 
 func TestSendMessage(t *testing.T) {
-	t.Setenv("QWEN_API_KEY", "test-qwen-key")
 	r := newTestRouter()
 
 	req := httptest.NewRequest("POST", "/api/v1/sessions", strings.NewReader(`{"mode":"voice_llm"}`))
@@ -167,33 +168,6 @@ func TestSendMessage(t *testing.T) {
 
 	if w2.Code != http.StatusAccepted {
 		t.Errorf("expected 202, got %d", w2.Code)
-	}
-}
-
-func TestSendMessageRequiresQwenKey(t *testing.T) {
-	r := newTestRouter()
-
-	req := httptest.NewRequest("POST", "/api/v1/sessions", strings.NewReader(`{"mode":"voice_llm"}`))
-	w := httptest.NewRecorder()
-	r.Handler().ServeHTTP(w, req)
-	var resp CreateSessionResponse
-	json.NewDecoder(w.Body).Decode(&resp)
-
-	body := `{"text": "Hello"}`
-	req2 := httptest.NewRequest("POST", "/api/v1/sessions/"+resp.SessionID+"/message", strings.NewReader(body))
-	w2 := httptest.NewRecorder()
-	r.Handler().ServeHTTP(w2, req2)
-
-	if w2.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w2.Code)
-	}
-
-	var errResp ErrorResponse
-	if err := json.NewDecoder(w2.Body).Decode(&errResp); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(errResp.Error, "QWEN_API_KEY") {
-		t.Fatalf("expected QWEN_API_KEY hint, got %q", errResp.Error)
 	}
 }
 

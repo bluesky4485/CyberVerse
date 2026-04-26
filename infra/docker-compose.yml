@@ -26,7 +26,6 @@ services:
       dockerfile: infra/Dockerfile.server
     ports:
       - "8080:8080"
-      - "8443:8443"  # TURN server TCP (for WebRTC ICE relay)
     environment:
       - LIVEKIT_URL=ws://livekit:7880
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
@@ -36,7 +35,6 @@ services:
       - DOUBAO_APP_ID=${DOUBAO_APP_ID:-}
       - QWEN_API_KEY=${QWEN_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - TURN_PASSWORD=${TURN_PASSWORD:-cyberverse_turn_dev}
     depends_on:
       - livekit
       - cyberverse-inference

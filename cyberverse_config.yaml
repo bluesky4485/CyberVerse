@@ -61,12 +61,12 @@ inference:
             app_id: "${DOUBAO_APP_ID}"
             # 参考 skill 文档与 code-example：示例所用域名，否则在当前环境会出现 DNS 解析失败
             ws_url: "wss://openspeech.bytedance.com/api/v3/realtime/dialogue"
-            voice_type: "温柔文雅"
+            voice_type: "zh_female_default"
             system_prompt: "你是一个友善的数字人助手。"
             # Avoid DialogAudioIdleTimeoutError before FlashHead's first chunk arrives.
             end_smooth_window_ms: 6000
     llm:
-        default: "qwen"
+        default: "openai"
         qwen:
             plugin_class: "inference.plugins.llm.qwen_plugin.QwenLLMPlugin"
             api_key: "${QWEN_API_KEY}"
@@ -81,7 +81,7 @@ inference:
             temperature: 0.7
             system_prompt: "你是一个友善的数字人助手。"
     tts:
-        default: "qwen"
+        default: "openai"
         qwen:
             plugin_class: "inference.plugins.tts.qwen_tts_plugin.QwenTTSPlugin"
             api_key: "${QWEN_API_KEY}"
