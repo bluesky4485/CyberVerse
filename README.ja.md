@@ -1,18 +1,30 @@
-# CyberVerse
+<h1 align="center">CyberVerse</h1>
+<p align="center"><em>CyberVerse は、リアルタイムのビデオ通話に対応したオープンソースの<strong>デジタルヒューマン・エージェント・プラットフォーム</strong>です。ビデオ通話のように、顔を見ながら会話できる AI エージェントを作成できます。</em></p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | **日本語** | [한국어](README.ko.md)
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md"><strong>日本語</strong></a> · <a href="README.ko.md">한국어</a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg" alt="License: GPL v3"/></a>
+  <a href="https://github.com/dsd2077/CyberVerse/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/></a>
+</p>
+
+<p align="center">
+  <a href="docs/assets/logo.png"><img src="docs/assets/logo.png" alt="CyberVerse logo" width="100%"/></a>
+</p>
+
+---
 
 ### たった一枚の写真から、息づくデジタルヒューマンへ。
 
 > あなたを本当に見て、聞いて、リアルタイムで話しかけてくれる、自分だけの J.A.R.V.I.S. のような AI を夢見たことはありませんか？
+>
 > もう会えない大切な人に再び会い、その声を聞き、笑顔を見ることができたらどうでしょうか。
+>
 > あるいは、ずっと命を吹き込みたかったキャラクターがいるかもしれません。
 >
 > **必要なのはたった一枚の写真。CyberVerse がその存在を動き出させます。**
-
-CyberVerse は、リアルタイムのビデオ通話に対応したオープンソースの**デジタルヒューマン・エージェント・プラットフォーム**です。ビデオ通話のように、顔を見ながら会話できる AI エージェントを作成できます。
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 
 ## 特長
 
@@ -36,11 +48,11 @@ CyberVerse は、リアルタイムのビデオ通話に対応したオープン
 
 <div align="center">
 
-| [![](docs/demo/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/demo/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
+| [![](docs/assets/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/assets/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
 |:---:|:---:|
 | [**Alice — YouTube で見る**](https://youtu.be/Lk88sew2x4o) | [**Lina — YouTube で見る**](https://youtu.be/8jdQ3ThcwgA) |
 
-| [![](docs/demo/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
+| [![](docs/assets/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
 |:---:|
 | [**Xiaolongnü — YouTube で見る**](https://youtu.be/WjEHUYZx5Gs) |
 
@@ -54,8 +66,10 @@ CyberVerse は、リアルタイムのビデオ通話に対応したオープン
 |-------|---------|-----|-------|------------|-----|------------|
 | FlashHead 1.3B | Pro | RTX 5090 | 2 | 512×512 | 25+ | ✅ はい |
 | FlashHead 1.3B | Pro | RTX 4090 | 1 | 512×512 | ~10.8 | ❌ いいえ |
+| FlashHead 1.3B | Pro | RTX PRO 6000 | 1 | 512×512 | 20 | ✅ はい |
 | FlashHead 1.3B | Lite | RTX 4090 | 1 | 512×512 | 25+ | ✅ はい |
 | LiveAct 18B | — | RTX PRO 6000 | 2 | 320×480 | 20 | ✅ はい |
+| LiveAct 18B | — | RTX PRO 6000 | 1 | 256×417 | 20 | ✅ はい |
 
 > **Pro** は画質優先、**Lite** は速度優先です。表は代表的な **画質と計算資源のバランス** の例です。余裕があれば画質を上げられ、不足なら解像度や **Pro** / **Lite** など画質側の設定を下げてリアルタイム性を確保してください。
 
@@ -158,6 +172,32 @@ inference:
       checkpoint_dir: "./checkpoints/SoulX-FlashHead-1_3B"  # ← ローカルのパス
       wav2vec_dir: "./checkpoints/wav2vec2-base-960h"        # ← ローカルのパス
       model_type: "lite"           # 高画質が必要なら "pro"（より多くの GPU が必要）
+      compile_model: true
+      compile_vae: true
+      dist_worker_main_thread: true
+      infer_params:
+        frame_num: 33
+        motion_frames_latent_num: 2
+        tgt_fps: 20
+        sample_rate: 16000
+        sample_shift: 5
+        color_correction_strength: 1.0
+        cached_audio_duration: 8
+        num_heads: 12
+        height: 512
+        width: 512
+    live_act:
+      ckpt_dir: "./checkpoints/LiveAct"                     # ← ローカルのパス
+      wav2vec_dir: "./checkpoints/chinese-wav2vec2-base"   # ← ローカルのパス
+      seed: 42
+      compile_wan_model: false
+      compile_vae_decode: false
+      dist_worker_main_thread: true
+      default_prompt: "一个人在说话"
+      infer_params:
+        size: "320*480"
+        fps: 20
+        audio_cfg: 1.0
 ```
 
 ここでのパス編集はひとまずスキップして、あとで Web UI から調整しても構いません。
@@ -231,6 +271,24 @@ make frontend
 curl -s http://localhost:8080/api/v1/health
 ```
 
+### リモートアクセス時は 8443/TCP の疎通を確認する
+
+`streaming_mode: direct` で組み込み TURN を使う場合、ブラウザはサーバーの `8443/TCP` に到達できる必要があります。ページは開けるのに音声・映像がいつまでも接続されない、またはサーバーログに `ICE connection state: failed` や `publish timeout waiting for connection` が出る場合は、まず手元の端末からサーバーの `8443` ポートに疎通できるか確認してください。
+
+```bash
+nc -vz <server-ip> 8443
+```
+
+`8443` に到達できない場合、原因はクラウドのセキュリティグループ、ファイアウォール、または NAT 制限であることが一般的です。その場合は、SSH トンネルでローカルの `8443` をサーバーへ転送できます。
+
+```bash
+ssh -L 8443:127.0.0.1:8443 user@host -p port
+```
+
+トンネル確立後、ブラウザはローカルの `127.0.0.1:8443` 経由でリモート TURN サービスへ接続します。
+
+SSH トンネルではなくブラウザからリモートサーバーへ直接接続したい場合は、`cyberverse_config.yaml` の `pipeline.ice_public_ip` にサーバーのグローバル IP またはドメインを設定してください。SSH トンネルを使う場合は、デフォルト値（`127.0.0.1`）のままで構いません。
+
 ブラウザで http://localhost:5173 を開けば準備完了です。
 
 ## ロードマップ
@@ -243,11 +301,12 @@ curl -s http://localhost:8080/api/v1/health
 - [x] WebRTC によるリアルタイム音声・映像。直接 P2P（組み込み TURN）または LiveKit SFU
 - [x] avatar、voice LLM、LLM、TTS、ASR をプラグインとして提供し、YAML で各ベンダーの API キーを設定可能（現状は豆包音声のキー 1 つで実行可能）
 - [x] セッション管理：キャラクター単位で会話履歴をディスクに永続化し、会話開始時に読み込み
+- [x] 音声クローン：豆包音声の音声クローンに対応
+- [x] 音声とテキストのハイブリッド入力に対応
+- [ ] モデル発話中の音声割り込みとセッションの中断・再開
 - [ ] 知識・文書・人物の生平などの素材を取り込み、キャラクターに沿った RAG による回答
 - [ ] Face-to-face：ユーザー側のカメラ / 映像入力と、動作・ジェスチャーなど視覚的手がかりの理解
 - [ ] 開発者向けのサイト埋め込み（Web コンポーネントまたは SDK）、自己ホストしたインスタンスを自サイトへ接続
-- [ ] 音声クローン：少量の参照音声からキャラクターに一致する声色
-- [ ] モデル発話中の音声割り込みとセッションの中断・再開
 - [ ] ライブ配信向けの音声・映像ストリーミング
 
 ### 2. **デジタルヒューマン・エージェント**

@@ -113,7 +113,7 @@ pipeline:
     turn_realm: "cyberverse"
     turn_username: "cyberverse"
     turn_password: "${TURN_PASSWORD}"
-    ice_public_ip: "148.135.46.242" # Server public IP for TURN relay advertisement
+    ice_public_ip: "" # Set real public IP/domain when needed; empty defaults to 127.0.0.1
 recording:
     enabled: true # 设为 true 开启录制
     output_dir: "./recordings"
