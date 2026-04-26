@@ -11,6 +11,13 @@ CONDA_ENV     ?= $(HOME)/miniconda3/envs/cyberverse
 CONDA_LIB      = $(CONDA_ENV)/lib
 CONDA_PKG_CFG  = $(CONDA_LIB)/pkgconfig
 
+# Locate Node 22+ via nvm or PATH fallback
+NVM_NODE      := $(HOME)/.nvm/versions/node
+NODE_BIN      ?= $(shell \
+  found=$$(ls -d $(NVM_NODE)/v22.*/bin/node 2>/dev/null | sort -V | tail -1); \
+  if [ -x "$$found" ]; then dirname "$$found"; \
+  else echo ""; fi)
+
 # Proto generation (Python + Go)
 proto:
 	./scripts/generate_proto.sh
@@ -51,7 +58,7 @@ server:
 	    $(GO) run -tags livekit ./cmd/cyberverse-server/ --config ../cyberverse_config.yaml
 
 frontend:
-	cd frontend && npm run dev
+	@if [ -n "$(NODE_BIN)" ]; then export PATH=$(NODE_BIN):$$PATH; fi; cd frontend && npm run dev
 
 # Build
 build-go:
