@@ -1,21 +1,30 @@
-# CyberVerse
+<h1 align="center">CyberVerse</h1>
+<p align="center"><em>CyberVerse is an open-source <strong>digital human agent platform</strong> with real-time video calling. Create an AI agent you can see and talk to, face to face, just like a video call.</em></p>
 
-**English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+<p align="center">
+  <a href="README.md"><strong>English</strong></a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg" alt="License: GPL v3"/></a>
+  <a href="https://github.com/dsd2077/CyberVerse/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/></a>
+</p>
+
+<p align="center">
+  <a href="docs/assets/logo.png"><img src="docs/assets/logo.png" alt="CyberVerse logo" width="100%"/></a>
+</p>
+
+---
 
 ### One Photo. A Living Digital Human.
 
 > Ever dreamed of having your own J.A.R.V.I.S. — an AI that truly sees you, hears you, and talks back in real time?
-
-> Want to see someone you've lost again, hear their voice, watch them smile at you?
-
-> Or maybe there's a character you've always wished you could bring to life?
-
 >
- **Just one photo. CyberVerse makes them alive.**
-
-CyberVerse is an open-source **digital human agent platform** with real-time video calling. Create an AI agent you can see and talk to, face to face, just like a video call.
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
+> Want to see someone you've lost again, hear their voice, watch them smile at you?
+>
+> Or maybe there's a character you've always wished you could bring to life?
+>
+> **Just one photo. CyberVerse makes them alive.**
 
 ## Features
 
@@ -39,11 +48,11 @@ Brain, face, voice, ears — every component is a swappable plugin. Mix and matc
 
 <div align="center">
 
-| [![](docs/demo/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/demo/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
+| [![](docs/assets/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/assets/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
 |:---:|:---:|
 | [**Alice — watch on YouTube**](https://youtu.be/Lk88sew2x4o) | [**Lina — watch on YouTube**](https://youtu.be/8jdQ3ThcwgA) |
 
-| [![](docs/demo/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
+| [![](docs/assets/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
 |:---:|
 | [**Xiaolongnü — watch on YouTube**](https://youtu.be/WjEHUYZx5Gs) |
 

@@ -22,7 +22,7 @@
 
 ## 中文文档推荐目录
 
-- `docs/demo/`
+- `docs/assets/`
   - 演示素材、截图、录屏。
 - `docs/zh-CN/features/`
   - 每个已实现功能或重要重构一篇文档。

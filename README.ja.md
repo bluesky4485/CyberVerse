@@ -1,18 +1,30 @@
-# CyberVerse
+<h1 align="center">CyberVerse</h1>
+<p align="center"><em>CyberVerse は、リアルタイムのビデオ通話に対応したオープンソースの<strong>デジタルヒューマン・エージェント・プラットフォーム</strong>です。ビデオ通話のように、顔を見ながら会話できる AI エージェントを作成できます。</em></p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | **日本語** | [한국어](README.ko.md)
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md"><strong>日本語</strong></a> · <a href="README.ko.md">한국어</a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg" alt="License: GPL v3"/></a>
+  <a href="https://github.com/dsd2077/CyberVerse/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/></a>
+</p>
+
+<p align="center">
+  <a href="docs/assets/logo.png"><img src="docs/assets/logo.png" alt="CyberVerse logo" width="100%"/></a>
+</p>
+
+---
 
 ### たった一枚の写真から、息づくデジタルヒューマンへ。
 
 > あなたを本当に見て、聞いて、リアルタイムで話しかけてくれる、自分だけの J.A.R.V.I.S. のような AI を夢見たことはありませんか？
+>
 > もう会えない大切な人に再び会い、その声を聞き、笑顔を見ることができたらどうでしょうか。
+>
 > あるいは、ずっと命を吹き込みたかったキャラクターがいるかもしれません。
 >
 > **必要なのはたった一枚の写真。CyberVerse がその存在を動き出させます。**
-
-CyberVerse は、リアルタイムのビデオ通話に対応したオープンソースの**デジタルヒューマン・エージェント・プラットフォーム**です。ビデオ通話のように、顔を見ながら会話できる AI エージェントを作成できます。
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 
 ## 特長
 
@@ -36,11 +48,11 @@ CyberVerse は、リアルタイムのビデオ通話に対応したオープン
 
 <div align="center">
 
-| [![](docs/demo/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/demo/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
+| [![](docs/assets/爱丽丝.mov.png)](https://youtu.be/Lk88sew2x4o) | [![](docs/assets/丽娜.mov.png)](https://youtu.be/8jdQ3ThcwgA) |
 |:---:|:---:|
 | [**Alice — YouTube で見る**](https://youtu.be/Lk88sew2x4o) | [**Lina — YouTube で見る**](https://youtu.be/8jdQ3ThcwgA) |
 
-| [![](docs/demo/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
+| [![](docs/assets/小龙女.mov.png)](https://youtu.be/WjEHUYZx5Gs) |
 |:---:|
 | [**Xiaolongnü — YouTube で見る**](https://youtu.be/WjEHUYZx5Gs) |
 
