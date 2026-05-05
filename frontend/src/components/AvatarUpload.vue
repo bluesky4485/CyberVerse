@@ -339,9 +339,9 @@ function createDefaultCropBox() {
   if (!imageRenderedWidth.value || !imageRenderedHeight.value) return
   const size = Math.min(imageRenderedWidth.value, imageRenderedHeight.value) * 0.72
   cropBox.value = normalizeCropBox({
-    x: (imageRenderedWidth.value - size) / 2,
+    x: 0,
     y: (imageRenderedHeight.value - size) / 2,
-    width: size,
+    width: imageRenderedWidth.value,
     height: size,
   })
 }
