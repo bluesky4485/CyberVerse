@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import { getHealth } from '../services/api'
-import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 
 const router = useRouter()
-const { t } = useI18n()
 const voiceOnline = ref(false)
 const personaCount = ref(0)
 
@@ -39,18 +36,17 @@ function enter() {
       <div class="flex items-center gap-4">
         <span class="text-[13px] font-bold tracking-[2.34px] uppercase text-[#f6efe8]">CyberVerse</span>
         <div class="w-12 h-px bg-cyber-cyan/40" />
-        <span class="text-xs tracking-[0.96px] uppercase text-cyber-label">{{ t('landing.protocol') }}</span>
-        <LanguageSwitcher />
+        <span class="text-xs tracking-[0.96px] uppercase text-cyber-label">city gateway protocol</span>
       </div>
       <div class="flex items-center gap-3">
         <div class="flex items-center h-8 px-3 border text-xs tracking-[0.72px] uppercase"
              :class="voiceOnline
                ? 'bg-cyber-cyan/8 border-cyber-cyan/28 text-[#9ff4fb]'
                : 'bg-red-500/8 border-red-500/28 text-red-400'">
-          {{ voiceOnline ? t('landing.voiceOnline') : t('landing.voiceOffline') }}
+          {{ voiceOnline ? 'voice online' : 'voice offline' }}
         </div>
         <div class="flex items-center h-8 px-3 bg-[rgba(12,16,20,0.95)] border border-[rgba(72,80,92,0.72)] text-[#d7dde4] text-xs cursor-pointer hover:border-cyber-cyan/40 transition-colors">
-          {{ t('landing.search') }}
+          Search
         </div>
       </div>
     </nav>
@@ -63,7 +59,7 @@ function enter() {
 
         <!-- District label -->
         <p class="text-center text-xs tracking-[1.44px] uppercase text-[#8fe8ef] pt-[60px]">
-          {{ t('landing.district') }}
+          district 01 &nbsp;/&nbsp; public gateway &nbsp;/&nbsp; role access
         </p>
 
         <div class="flex flex-1 flex-col px-6 pb-10">
@@ -84,7 +80,7 @@ function enter() {
 
             <!-- Subtitle -->
             <p class="text-center text-lg text-[#b7bfca] mt-16 max-w-[660px] mx-auto leading-[1.82]">
-              {{ t('landing.subtitle') }}
+              A neon gateway for digital identities, voice sessions, and synthetic presence.
             </p>
 
             <!-- Enter button with lines -->
@@ -94,7 +90,7 @@ function enter() {
                 @click="enter"
                 class="relative px-8 h-[52px] bg-gradient-to-b from-[#ff4f79] to-[#a71333] text-[#fff6f8] text-[15px] font-extrabold tracking-[0.6px] shadow-[0_0_24px_rgba(255,79,121,0.22)] hover:shadow-[0_0_36px_rgba(255,79,121,0.35)] transition-shadow cursor-pointer"
               >
-                {{ t('landing.enter') }}
+                Enter CyberVerse
               </button>
               <div class="w-40 h-px bg-gradient-to-l from-transparent to-cyber-cyan/40" />
             </div>
@@ -102,7 +98,7 @@ function enter() {
 
           <!-- HUD footer -->
           <p class="pt-8 text-center text-[11px] tracking-[0.88px] uppercase text-cyber-muted">
-            {{ t('landing.footer', { count: personaCount || 4 }) }}
+            v0.1.0 &nbsp;&mdash;&nbsp; {{ personaCount || 4 }} persona channels available &nbsp;&mdash;&nbsp; voice sync ready
           </p>
         </div>
       </div>
