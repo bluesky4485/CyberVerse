@@ -165,12 +165,13 @@ function applyTTSVoiceDefault(tts: string, force = false) {
     return
   }
 
-  if (tts === 'qwen' && (isOfficialVoiceType(current) || isOpenAIVoiceType(current))) {
+  if (tts === 'qwen' && !isQwenTTSVoiceType(current)) {
     form.value.voice_type = DEFAULT_QWEN_TTS_VOICE
   } else if (tts === 'openai' && !isOpenAIVoiceType(current)) {
     form.value.voice_type = 'nova'
   } else if (tts === 'doubao') {
-    syncVoiceInputs(current)
+    const looksLikeNonDoubaoVoice = isQwenTTSVoiceType(current) || isOpenAIVoiceType(current) || isQwenOmniVoiceType(current)
+    syncVoiceInputs(looksLikeNonDoubaoVoice ? DEFAULT_OFFICIAL_VOICE : current)
   }
 }
 
@@ -183,6 +184,7 @@ function applyModeVoiceDefault(force = false) {
   form.value.voice_provider = normalizeOmniProvider(form.value.voice_provider)
   const current = form.value.voice_type.trim()
   const provider = form.value.voice_provider
+
   if (provider === 'qwen_omni') {
     if (force || !current || !isQwenOmniVoiceType(current)) {
       form.value.voice_type = DEFAULT_QWEN_OMNI_VOICE
@@ -192,8 +194,8 @@ function applyModeVoiceDefault(force = false) {
     return
   }
 
-  const looksLikeStandardVoice = isQwenTTSVoiceType(current) || isOpenAIVoiceType(current) || isQwenOmniVoiceType(current)
-  if (force || !current || looksLikeStandardVoice) {
+  const looksLikeNonDoubaoVoice = isQwenTTSVoiceType(current) || isOpenAIVoiceType(current) || isQwenOmniVoiceType(current)
+  if (force || !current || looksLikeNonDoubaoVoice) {
     form.value.voice_type = defaultVoiceForOmni(provider)
   }
   syncVoiceInputs(form.value.voice_type)
@@ -247,9 +249,8 @@ function resolveVoiceType() {
   }
 
   if (!usesDoubaoVoice.value) {
-    const voice = form.value.voice_type.trim() || defaultVoiceForTTS(selectedTTS.value)
-    form.value.voice_type = voice
-    return voice
+    applyTTSVoiceDefault(selectedTTS.value)
+    return form.value.voice_type.trim() || defaultVoiceForTTS(selectedTTS.value)
   }
 
   if (voiceMode.value === 'custom') {
@@ -281,7 +282,7 @@ watch(
   () => form.value.components.tts,
   (tts) => {
     voiceError.value = ''
-    applyTTSVoiceDefault(tts)
+    applyTTSVoiceDefault(tts, true)
   }
 )
 
@@ -289,7 +290,7 @@ watch(
   () => form.value.mode,
   () => {
     voiceError.value = ''
-    applyModeVoiceDefault()
+    applyModeVoiceDefault(true)
   }
 )
 
@@ -298,7 +299,7 @@ watch(
   () => {
     if (form.value.mode === 'omni') {
       voiceError.value = ''
-      applyModeVoiceDefault()
+      applyModeVoiceDefault(true)
     }
   }
 )
