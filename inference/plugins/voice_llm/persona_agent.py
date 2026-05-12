@@ -311,6 +311,39 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
             json.dumps(fields, ensure_ascii=False, sort_keys=True),
         )
 
+    @staticmethod
+    def _task_event_payload(task: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "type": "task_event",
+            "task_id": event.get("task_id") or task.get("id"),
+            "session_id": task.get("session_id"),
+            "seq": event.get("seq"),
+            "event_type": event.get("event_type"),
+            "status": event.get("status") or task.get("status"),
+            "message": event.get("message") or "",
+            "progress": event.get("progress", task.get("progress", 0)),
+            "created_at": event.get("created_at"),
+            "task": task,
+        }
+        event_payload = event.get("payload")
+        if isinstance(event_payload, str):
+            try:
+                event_payload = json.loads(event_payload)
+            except json.JSONDecodeError:
+                event_payload = {}
+        if isinstance(event_payload, dict) and event_payload:
+            payload["payload"] = event_payload
+        return payload
+
+    @staticmethod
+    def _drain_task_events(queue: asyncio.Queue[dict[str, Any]]) -> list[dict[str, Any]]:
+        drained: list[dict[str, Any]] = []
+        while True:
+            try:
+                drained.append(queue.get_nowait())
+            except asyncio.QueueEmpty:
+                return drained
+
     async def _run_async_task(
         self,
         pending: PendingSubAgentTask,
@@ -372,6 +405,16 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
         turn_transcripts: list[str] = []
         pending_task_starts: list[PendingSubAgentTask] = []
         background_tasks: set[asyncio.Task[None]] = set()
+        task_events: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        remove_task_event_listener = None
+
+        def enqueue_task_event(task: dict[str, Any], event: dict[str, Any]) -> None:
+            if str(task.get("session_id") or "") != str(session_config.session_id or ""):
+                return
+            task_events.put_nowait(self._task_event_payload(task, event))
+
+        if hasattr(self.task_runtime, "add_event_listener"):
+            remove_task_event_listener = self.task_runtime.add_event_listener(enqueue_task_event)  # type: ignore[union-attr]
 
         def schedule_task_start(pending: PendingSubAgentTask) -> None:
             task = asyncio.create_task(self._run_async_task(pending, injected))
@@ -383,6 +426,9 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
                 self._merged_input_stream(input_stream, injected),
                 session_config=model_session_config,
             ):
+                for payload in self._drain_task_events(task_events):
+                    yield VoiceLLMOutputEvent(task_event=payload)
+
                 self._log_model_event(session_config.session_id, event)
                 if event.user_transcript:
                     turn_transcripts.append(event.user_transcript)
@@ -447,6 +493,8 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
                                 )
                             )
                         )
+                    for payload in self._drain_task_events(task_events):
+                        yield VoiceLLMOutputEvent(task_event=payload)
                     continue
 
                 if self._has_assistant_output(event) and (pending_partials or turn_transcripts):
@@ -459,7 +507,11 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
                     pending_task_starts.clear()
                     for pending in starts:
                         schedule_task_start(pending)
+            for payload in self._drain_task_events(task_events):
+                yield VoiceLLMOutputEvent(task_event=payload)
         finally:
+            if remove_task_event_listener is not None:
+                remove_task_event_listener()
             for task in background_tasks:
                 task.cancel()
             if background_tasks:

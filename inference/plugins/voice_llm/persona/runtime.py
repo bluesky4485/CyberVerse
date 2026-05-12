@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import uuid
 from datetime import datetime, timezone
+from collections.abc import Callable
 from typing import Any
 
 from inference.plugins.voice_llm.persona.i18n import Localizer
@@ -103,6 +105,7 @@ class LocalTaskRuntime:
         self._artifacts: dict[str, Artifact] = {}
         self._task_artifacts: dict[str, list[str]] = {}
         self._runners: dict[str, asyncio.Task[None]] = {}
+        self._event_listeners: set[Callable[[dict[str, Any], dict[str, Any]], Any]] = set()
         self._lock = asyncio.Lock()
 
     async def shutdown(self) -> None:
@@ -112,6 +115,25 @@ class LocalTaskRuntime:
         if runners:
             await asyncio.gather(*runners, return_exceptions=True)
         self._runners.clear()
+
+    def add_event_listener(self, listener: Callable[[dict[str, Any], dict[str, Any]], Any]) -> Callable[[], None]:
+        self._event_listeners.add(listener)
+
+        def remove() -> None:
+            self._event_listeners.discard(listener)
+
+        return remove
+
+    async def _notify_event_listeners(self, task: dict[str, Any], event: dict[str, Any]) -> None:
+        if not self._event_listeners:
+            return
+        for listener in list(self._event_listeners):
+            try:
+                result = listener(task, event)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logger.exception("persona task event listener failed: task_id=%s", task.get("id"))
 
     async def create_task(self, session_id: str, args: dict[str, Any]) -> dict[str, Any]:
         user_request = str(
@@ -252,12 +274,16 @@ class LocalTaskRuntime:
                     "artifact_id": artifact.id,
                     "title": artifact.title,
                     "type": artifact.type,
+                    "mime_type": artifact.mime_type,
+                    "content": artifact.content,
                 },
             ),
         )
         return _as_json(artifact)
 
     async def append_event(self, task_id: str, event: TaskEvent) -> dict[str, Any]:
+        task_json: dict[str, Any] | None = None
+        event_json: dict[str, Any] | None = None
         async with self._lock:
             task = self._tasks.get(task_id)
             if task is None:
@@ -293,7 +319,10 @@ class LocalTaskRuntime:
                 task.result_summary = stored.message
             if status in TERMINAL_STATUSES:
                 task.finished_at = now
-            return _as_json(stored)
+            task_json = _as_json(task)
+            event_json = _as_json(stored)
+        await self._notify_event_listeners(task_json, event_json)
+        return event_json
 
     async def _run_task(self, task_id: str) -> None:
         try:

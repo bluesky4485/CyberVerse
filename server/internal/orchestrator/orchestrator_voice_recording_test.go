@@ -13,6 +13,7 @@ import (
 	"github.com/cyberverse/server/internal/inference"
 	pb "github.com/cyberverse/server/internal/pb"
 	"github.com/cyberverse/server/internal/recording"
+	"github.com/cyberverse/server/internal/ws"
 )
 
 type voiceRecordingInferenceStub struct {
@@ -221,6 +222,51 @@ func TestVoiceTurnSavesTranscriptAndRawAudioOnFinalBeforeAvatarDone(t *testing.T
 	close(inf.outputs)
 	close(inf.errs)
 	session.WaitPipelineDone(2 * time.Second)
+}
+
+func TestVoicePipelineBroadcastsPersonaTaskEvent(t *testing.T) {
+	orch, session, _, inf := newVoiceRecordingHarness(t)
+	orch.wsHub = ws.NewHub()
+	client := &ws.Client{SessionID: session.ID, Send: make(chan []byte, 16)}
+	orch.wsHub.Register(client)
+
+	if err := orch.HandleAudioStream(context.Background(), session.ID, make(chan []byte)); err != nil {
+		t.Fatal(err)
+	}
+	<-inf.started
+
+	inf.outputs <- &pb.VoiceLLMOutput{
+		TaskEventJson: `{"task_id":"task-1","seq":1,"event_type":"task.queued","status":"queued","message":"任务已加入队列。","progress":0,"task":{"id":"task-1","session_id":"session-recording","title":"知乎热榜","status":"queued","progress":0}}`,
+	}
+	close(inf.outputs)
+	close(inf.errs)
+
+	var taskEvent map[string]any
+	deadline := time.After(2 * time.Second)
+	for taskEvent == nil {
+		select {
+		case data := <-client.Send:
+			var msg map[string]any
+			if err := json.Unmarshal(data, &msg); err != nil {
+				t.Fatalf("unmarshal websocket message: %v", err)
+			}
+			if msg["type"] == "task_event" {
+				taskEvent = msg
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for task_event websocket message")
+		}
+	}
+
+	if taskEvent["session_id"] != session.ID {
+		t.Fatalf("unexpected session_id: %+v", taskEvent)
+	}
+	if taskEvent["task_id"] != "task-1" || taskEvent["event_type"] != "task.queued" {
+		t.Fatalf("unexpected task event payload: %+v", taskEvent)
+	}
+
+	session.WaitPipelineDone(2 * time.Second)
+	orch.wsHub.Unregister(client)
 }
 
 func TestVoiceTurnDropsUnkeyedStaleFinalAfterBargeIn(t *testing.T) {

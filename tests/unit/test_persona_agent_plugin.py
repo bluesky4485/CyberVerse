@@ -11,7 +11,9 @@ from inference.core.types import (
     VoiceLLMSessionConfig,
 )
 from inference.plugins.voice_llm.base import VoiceLLMPlugin
+from inference.plugins.voice_llm.persona import runtime as runtime_module
 from inference.plugins.voice_llm.persona.runtime import LocalTaskRuntime
+from inference.plugins.voice_llm.persona.schemas import ArtifactRequest, TaskEvent
 from inference.plugins.voice_llm.persona_agent import PERSONA_AGENT_INSTRUCTIONS, PersonaAgentPlugin
 from langchain.messages import AIMessage
 
@@ -282,6 +284,60 @@ async def make_persona(scenario, checkpoint_db_path):
     return plugin
 
 
+async def make_persona_with_local_runtime(scenario, checkpoint_db_path, monkeypatch):
+    monkeypatch.setattr(
+        runtime_module,
+        "build_agent_llm_from_runtime_config",
+        lambda _runtime_config=None: FakeRuntimeLLM(),
+    )
+
+    async def fake_run_task_with_langgraph(task, _search_tool, callbacks, **_kwargs):
+        artifact = await callbacks.artifact(
+            task.id,
+            ArtifactRequest(
+                title="知乎热点",
+                type="html",
+                mime_type="text/html; charset=utf-8",
+                content="<html><body>已完成整理。</body></html>",
+            ),
+        )
+        await callbacks.event(
+            task.id,
+            TaskEvent(
+                event_type="task.completed",
+                status="completed",
+                message="已整理好资料。",
+                progress=100,
+                payload={"artifact_id": artifact["id"]},
+            ),
+        )
+
+    monkeypatch.setattr(runtime_module, "run_task_with_langgraph", fake_run_task_with_langgraph)
+
+    plugin = PersonaAgentPlugin()
+    await plugin.initialize(
+        PluginConfig(
+            plugin_name="persona.persona",
+            params={
+                "model_provider": "fake",
+                "checkpoint_db_path": str(checkpoint_db_path),
+                "task_poll_interval_seconds": 0.01,
+                "task_monitor_timeout_seconds": 2,
+            },
+            shared={
+                "omni": {
+                    "fake": {
+                        "plugin_class": "tests.unit.test_persona_agent_plugin.FakeOmniPlugin",
+                        "scenario": scenario,
+                    }
+                },
+                "runtime_config": {"inference": {"persona_agent": {"max_agent_iterations": 1}}},
+            },
+        )
+    )
+    return plugin
+
+
 async def one_input():
     yield VoiceLLMInputEvent(audio=b"pcm")
 
@@ -437,6 +493,39 @@ async def test_local_task_runtime_ignores_legacy_kind():
 
     assert "kind" not in task
     assert task["user_request"] == "查询今天知乎上的热门新闻"
+
+
+@pytest.mark.asyncio
+async def test_persona_agent_projects_local_task_events(tmp_path, monkeypatch):
+    plugin = await make_persona_with_local_runtime(
+        "create_task",
+        tmp_path / "local_events.db",
+        monkeypatch,
+    )
+
+    try:
+        outputs = [
+            event
+            async for event in plugin.converse_stream(
+                one_input(),
+                VoiceLLMSessionConfig(session_id="session-1"),
+            )
+        ]
+    finally:
+        await plugin.shutdown()
+
+    task_events = [event.task_event for event in outputs if event.task_event]
+    event_types = [event["event_type"] for event in task_events]
+
+    assert outputs[0].user_transcript == "今天知乎有哪些热门信息"
+    assert outputs[-1].transcript == "查好了，资料已经整理好。"
+    assert "task.queued" in event_types
+    assert "task.started" in event_types
+    assert "artifact.created" in event_types
+    assert "task.completed" in event_types
+    assert all(event["type"] == "task_event" for event in task_events)
+    assert all(event["session_id"] == "session-1" for event in task_events)
+    assert any((event.get("payload") or {}).get("artifact_id") for event in task_events)
 
 
 @pytest.mark.asyncio

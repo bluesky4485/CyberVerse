@@ -103,6 +103,7 @@ class VoiceLLMOutputEvent:
     reply_id: str = ""
     barge_in: bool = False
     tool_calls: list[ToolCall] = field(default_factory=list)
+    task_event: dict[str, Any] | None = None
 
 
 @dataclass

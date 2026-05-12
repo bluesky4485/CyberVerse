@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppHeader from '../components/AppHeader.vue'
@@ -49,6 +49,7 @@ const testingVoice = ref(false)
 const voiceTestStatus = ref<'success' | 'error' | null>(null)
 const voiceTestMessage = ref('')
 const showModeHelp = ref(false)
+const hydratingCharacter = ref(false)
 const OFFICIAL_VOICE_PREVIEW_URL = 'https://console.volcengine.com/speech/new/experience/call'
 const CUSTOM_VOICE_CLONE_URL = 'https://console.volcengine.com/speech/new/experience/clone'
 const QWEN_TTS_VOICE_PREVIEW_URL = 'https://help.aliyun.com/zh/model-studio/qwen-tts-realtime'
@@ -281,6 +282,7 @@ watch(
 watch(
   () => form.value.components.tts,
   (tts) => {
+    if (hydratingCharacter.value) return
     voiceError.value = ''
     applyTTSVoiceDefault(tts, true)
   }
@@ -289,6 +291,7 @@ watch(
 watch(
   () => form.value.mode,
   () => {
+    if (hydratingCharacter.value) return
     voiceError.value = ''
     applyModeVoiceDefault(true)
   }
@@ -297,6 +300,7 @@ watch(
 watch(
   () => form.value.voice_provider,
   () => {
+    if (hydratingCharacter.value) return
     if (form.value.mode === 'omni') {
       voiceError.value = ''
       applyModeVoiceDefault(true)
@@ -315,23 +319,29 @@ onMounted(async () => {
     await store.fetchOne(characterId.value)
     if (store.current) {
       const c = store.current
-      form.value = {
-        name: c.name,
-        description: c.description,
-        avatar_image: c.avatar_image,
-        use_face_crop: c.use_face_crop,
-        image_mode: c.image_mode || 'fixed',
-        mode: normalizeMode(c.mode),
-        voice_provider: c.voice_provider,
-        voice_type: c.voice_type,
-        components: normalizeComponents(c.components),
-        speaking_style: c.speaking_style,
-        personality: c.personality,
-        welcome_message: c.welcome_message,
-        system_prompt: c.system_prompt,
-        tags: [...c.tags],
+      hydratingCharacter.value = true
+      try {
+        form.value = {
+          name: c.name,
+          description: c.description,
+          avatar_image: c.avatar_image,
+          use_face_crop: c.use_face_crop,
+          image_mode: c.image_mode || 'fixed',
+          mode: normalizeMode(c.mode),
+          voice_provider: c.voice_provider,
+          voice_type: c.voice_type,
+          components: normalizeComponents(c.components),
+          speaking_style: c.speaking_style,
+          personality: c.personality,
+          welcome_message: c.welcome_message,
+          system_prompt: c.system_prompt,
+          tags: [...c.tags],
+        }
+        applyModeVoiceDefault(!form.value.voice_type)
+        await nextTick()
+      } finally {
+        hydratingCharacter.value = false
       }
-      applyModeVoiceDefault(!form.value.voice_type)
       await loadImages()
     }
   } else {

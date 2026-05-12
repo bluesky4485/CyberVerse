@@ -26,6 +26,7 @@ export interface ChatTaskArtifact {
   title: string
   type: string
   url: string
+  mimeType?: string
 }
 
 export interface ChatTaskState {
@@ -240,12 +241,21 @@ export function useChat(sessionId: () => string) {
 
     const existing = artifacts.find((artifact) => artifact.id === artifactId)
     const type = readString(payload.type) || existing?.type || 'html'
+    const mimeType = readString(payload.mime_type)
+      || existing?.mimeType
+      || (type.includes('html') ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8')
     const title = readString(payload.title) || existing?.title || fallbackTitle || '任务产物'
+    const content = readString(payload.content)
+    const projectedUrl = readString(payload.url)
     const nextArtifact: ChatTaskArtifact = {
       id: artifactId,
       title,
       type,
-      url: existing?.url || getTaskArtifactUrl(taskId, artifactId),
+      mimeType,
+      url: projectedUrl
+        || (content
+          ? URL.createObjectURL(new Blob([content], { type: mimeType }))
+          : existing?.url || getTaskArtifactUrl(taskId, artifactId)),
     }
 
     if (existing) {

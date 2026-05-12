@@ -2634,6 +2634,21 @@ func (o *Orchestrator) runVoiceLLMPipeline(ctx context.Context, session *Session
 				outputCh = nil
 				continue
 			}
+			if rawTaskEvent := strings.TrimSpace(output.GetTaskEventJson()); rawTaskEvent != "" {
+				var payload map[string]any
+				if err := json.Unmarshal([]byte(rawTaskEvent), &payload); err != nil {
+					log.Printf("invalid persona task event json session=%s: %v", sessionID, err)
+				} else {
+					payload["type"] = "task_event"
+					if _, ok := payload["session_id"]; !ok {
+						payload["session_id"] = sessionID
+					}
+					o.broadcastJSON(sessionID, payload)
+				}
+				if !voiceOutputHasAssistantContent(output) && !voiceOutputIsFinal(output) && strings.TrimSpace(output.GetUserTranscript()) == "" && !output.GetBargeIn() {
+					continue
+				}
+			}
 			outputQuestionID := output.GetQuestionId()
 			outputReplyID := output.GetReplyId()
 

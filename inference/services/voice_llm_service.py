@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 import grpc
@@ -155,6 +156,8 @@ class VoiceLLMGRPCService(voice_llm_pb2_grpc.VoiceLLMServiceServicer):
                 output.reply_id = event.reply_id
             if event.barge_in:
                 output.barge_in = True
+            if event.task_event:
+                output.task_event_json = json.dumps(event.task_event, ensure_ascii=False)
             yield output
 
     async def CheckVoice(self, request, context):

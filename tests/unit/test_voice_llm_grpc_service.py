@@ -1,5 +1,6 @@
 """Tests for VoiceLLM gRPC service (audio-only; avatar is AvatarService)."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -80,6 +81,46 @@ async def test_converse_copies_turn_metadata():
     assert outs[0].question_id == "question-1"
     assert outs[0].reply_id == "reply-1"
     assert outs[0].barge_in is True
+
+
+@pytest.mark.asyncio
+async def test_converse_serializes_task_event_json():
+    reg = MagicMock()
+    voice = MagicMock()
+
+    async def fake_converse(_stream, session_config=None):
+        yield VoiceLLMOutputEvent(
+            task_event={
+                "type": "task_event",
+                "task_id": "task-1",
+                "session_id": "session-1",
+                "seq": 1,
+                "event_type": "task.queued",
+            }
+        )
+
+    voice.converse_stream = fake_converse
+    reg.get_by_category = MagicMock(return_value=voice)
+
+    svc = VoiceLLMGRPCService(reg)
+
+    from inference.generated import voice_llm_pb2
+
+    async def requests():
+        yield voice_llm_pb2.VoiceLLMInput(text="hello")
+
+    outs = []
+    async for o in svc.Converse(requests(), MagicMock()):
+        outs.append(o)
+
+    assert len(outs) == 1
+    assert json.loads(outs[0].task_event_json) == {
+        "type": "task_event",
+        "task_id": "task-1",
+        "session_id": "session-1",
+        "seq": 1,
+        "event_type": "task.queued",
+    }
 
 
 def test_input_event_from_pb_maps_image_frame():

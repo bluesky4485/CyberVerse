@@ -29,6 +29,7 @@ message VoiceLLMOutput {
   string question_id = 6;
   string reply_id = 7;
   bool barge_in = 8;
+  string task_event_json = 9;
 }
 
 message VoiceLLMConfig {

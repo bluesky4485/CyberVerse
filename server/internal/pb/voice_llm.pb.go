@@ -144,6 +144,7 @@ type VoiceLLMOutput struct {
 	QuestionId     string                 `protobuf:"bytes,6,opt,name=question_id,json=questionId,proto3" json:"question_id,omitempty"`
 	ReplyId        string                 `protobuf:"bytes,7,opt,name=reply_id,json=replyId,proto3" json:"reply_id,omitempty"`
 	BargeIn        bool                   `protobuf:"varint,8,opt,name=barge_in,json=bargeIn,proto3" json:"barge_in,omitempty"`
+	TaskEventJson  string                 `protobuf:"bytes,9,opt,name=task_event_json,json=taskEventJson,proto3" json:"task_event_json,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -225,6 +226,13 @@ func (x *VoiceLLMOutput) GetBargeIn() bool {
 		return x.BargeIn
 	}
 	return false
+}
+
+func (x *VoiceLLMOutput) GetTaskEventJson() string {
+	if x != nil {
+		return x.TaskEventJson
+	}
+	return ""
 }
 
 type VoiceLLMConfig struct {
@@ -590,7 +598,7 @@ const file_voice_llm_proto_rawDesc = "" +
 	"\x04text\x18\x02 \x01(\tH\x00R\x04text\x124\n" +
 	"\x06config\x18\x03 \x01(\v2\x1a.cyberverse.VoiceLLMConfigH\x00R\x06config\x12.\n" +
 	"\x05image\x18\x04 \x01(\v2\x16.cyberverse.ImageFrameH\x00R\x05imageB\a\n" +
-	"\x05input\"\xff\x01\n" +
+	"\x05input\"\xa7\x02\n" +
 	"\x0eVoiceLLMOutput\x12,\n" +
 	"\x05audio\x18\x01 \x01(\v2\x16.cyberverse.AudioChunkR\x05audio\x12\x1e\n" +
 	"\n" +
@@ -601,7 +609,8 @@ const file_voice_llm_proto_rawDesc = "" +
 	"\vquestion_id\x18\x06 \x01(\tR\n" +
 	"questionId\x12\x19\n" +
 	"\breply_id\x18\a \x01(\tR\areplyId\x12\x19\n" +
-	"\bbarge_in\x18\b \x01(\bR\abargeInJ\x04\b\x05\x10\x06\"\xe1\x02\n" +
+	"\bbarge_in\x18\b \x01(\bR\abargeIn\x12&\n" +
+	"\x0ftask_event_json\x18\t \x01(\tR\rtaskEventJsonJ\x04\b\x05\x10\x06\"\xe1\x02\n" +
 	"\x0eVoiceLLMConfig\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12#\n" +
