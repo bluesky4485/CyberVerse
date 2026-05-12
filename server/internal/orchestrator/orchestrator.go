@@ -680,7 +680,7 @@ func (o *Orchestrator) characterVoiceLLMProviderForSession(session *Session) str
 }
 
 func (o *Orchestrator) personaAgentEnabled(session *Session) bool {
-	return o != nil && session != nil && session.Mode == ModeOmni && o.taskService != nil && o.taskService.Enabled()
+	return o != nil && session != nil && session.Mode == ModeOmni
 }
 
 func (o *Orchestrator) sessionSupportsVisualInput(session *Session) bool {
@@ -1617,128 +1617,6 @@ func (o *Orchestrator) handleVoiceLLMTextInput(ctx context.Context, session *Ses
 	return nil
 }
 
-type agentTaskIntent int
-
-const (
-	agentTaskIntentChat agentTaskIntent = iota
-	agentTaskIntentCreate
-	agentTaskIntentStatus
-	agentTaskIntentCancel
-)
-
-func classifyAgentTaskIntent(text string) agentTaskIntent {
-	normalized := strings.ToLower(strings.TrimSpace(text))
-	if normalized == "" {
-		return agentTaskIntentChat
-	}
-	if containsAny(normalized, "取消", "停止", "不用查", "别查", "cancel", "stop") {
-		return agentTaskIntentCancel
-	}
-	if containsAny(normalized, "怎么样", "进度", "查到", "做到哪", "做到哪儿", "情况", "status", "progress") {
-		return agentTaskIntentStatus
-	}
-	if containsAny(normalized, "查", "搜索", "搜", "找", "整理", "研究", "调研", "报告", "热门", "热点", "有哪些", "知乎", "微博", "新闻") {
-		return agentTaskIntentCreate
-	}
-	return agentTaskIntentChat
-}
-
-func containsAny(text string, needles ...string) bool {
-	for _, needle := range needles {
-		if needle != "" && strings.Contains(text, needle) {
-			return true
-		}
-	}
-	return false
-}
-
-func (o *Orchestrator) maybeHandleAgentTaskInput(ctx context.Context, session *Session, sessionID string, text string) (bool, error) {
-	if o.taskService == nil || !o.taskService.Enabled() {
-		return false, nil
-	}
-	if o.personaAgentEnabled(session) {
-		return false, nil
-	}
-	intent := classifyAgentTaskIntent(text)
-	if intent == agentTaskIntentChat {
-		return false, nil
-	}
-
-	o.stopPipelineAndWait(session, sessionID, session.Mode == ModeOmni)
-	turnSeq := session.MarkTurnStarted()
-	o.advancePlaybackEpoch(sessionID, turnSeq)
-	session.AddMessage(ChatMessage{Role: "user", Content: text, TurnSeq: turnSeq})
-	if _, err := o.persistSessionConversation(session); err != nil {
-		log.Printf("conversation: SaveConversation task user message error session=%s: %v", sessionID, err)
-	}
-
-	switch intent {
-	case agentTaskIntentCreate:
-		task, err := o.taskService.CreateTask(ctx, agenttask.CreateTaskInput{
-			SessionID:   sessionID,
-			CharacterID: session.CharacterID,
-			Kind:        "research",
-			UserRequest: text,
-		})
-		if err != nil {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "这个任务我没能创建成功："+err.Error(), true)
-			return true, nil
-		}
-		reply := "好的，我现在开始处理“" + task.Title + "”，有进展会马上告诉你。"
-		_ = o.SpeakAssistantText(context.Background(), sessionID, reply, true)
-		return true, nil
-	case agentTaskIntentStatus:
-		task, err := o.taskService.LatestActiveTask(ctx, sessionID)
-		if errors.Is(err, agenttask.ErrNotFound) {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "现在没有正在执行的后台任务。", true)
-			return true, nil
-		}
-		if err != nil {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "我暂时查不到任务进度："+err.Error(), true)
-			return true, nil
-		}
-		events, _ := o.taskService.RecentEventsSummary(ctx, task.ID, 0, 200)
-		_ = o.SpeakAssistantText(context.Background(), sessionID, taskStatusReply(task, events), true)
-		return true, nil
-	case agentTaskIntentCancel:
-		task, err := o.taskService.LatestActiveTask(ctx, sessionID)
-		if errors.Is(err, agenttask.ErrNotFound) {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "现在没有需要取消的后台任务。", true)
-			return true, nil
-		}
-		if err != nil {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "我暂时取消不了任务："+err.Error(), true)
-			return true, nil
-		}
-		_, err = o.taskService.CancelTask(ctx, task.ID)
-		if err != nil {
-			_ = o.SpeakAssistantText(context.Background(), sessionID, "取消任务失败："+err.Error(), true)
-			return true, nil
-		}
-		_ = o.SpeakAssistantText(context.Background(), sessionID, "好的，这个后台任务已经取消。", true)
-		return true, nil
-	default:
-		return false, nil
-	}
-}
-
-func taskStatusReply(task *agenttask.Task, events []agenttask.Event) string {
-	if task == nil {
-		return "现在没有正在执行的后台任务。"
-	}
-	latest := ""
-	for i := len(events) - 1; i >= 0; i-- {
-		if msg := strings.TrimSpace(events[i].Message); msg != "" {
-			latest = msg
-			break
-		}
-	}
-	if latest == "" {
-		latest = "后台任务正在推进中。"
-	}
-	return fmt.Sprintf("“%s”现在是 %s，进度大约 %d%%。%s", task.Title, task.Status, task.Progress, latest)
-}
-
 func (o *Orchestrator) HandleTaskEvent(task *agenttask.Task, event *agenttask.Event) {
 	if o == nil || task == nil || event == nil {
 		return
@@ -1776,9 +1654,6 @@ func (o *Orchestrator) HandleTextInput(ctx context.Context, sessionID string, te
 		return nil
 	}
 
-	if handled, err := o.maybeHandleAgentTaskInput(ctx, session, sessionID, text); handled || err != nil {
-		return err
-	}
 	if session.Mode == ModeOmni {
 		return o.handleVoiceLLMTextInput(ctx, session, sessionID, text)
 	}

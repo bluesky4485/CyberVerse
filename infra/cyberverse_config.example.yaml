@@ -103,21 +103,14 @@ inference:
             model_provider: "qwen_omni"
             # Defaults to data/tasks/langgraph_checkpoints.db when empty.
             checkpoint_db_path: ""
-
-    agent_worker:
-        # The LangGraph task runtime is embedded in the inference process by
-        # default, so users do not need to start a separate worker during MVP
-        # development. Go TaskService dispatches to this HTTP endpoint.
-        enabled: true
-        host: "127.0.0.1"
-        port: 8090
-        llm:
-            # Defaults to inference.llm.default. Set this only when background
-            # tasks should use a different text LLM from the main config.
-            provider: "qwen"
+            llm:
+                # PersonaAgent owns the local Supervisor LangGraph and sub-agent
+                # runtime directly. Defaults to inference.llm.default; set this only
+                # when background tasks should use a different text LLM.
+                provider: "qwen"
 
     llm:
-        # Used by standard mode and by the embedded LangGraph Agent Worker.
+        # Used by standard mode and by PersonaAgent's local sub-agent runtime.
         # The global system prompt is owned by the Go orchestrator; do not
         # duplicate persona prompts here.
         default: "qwen"

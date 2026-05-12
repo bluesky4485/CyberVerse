@@ -4,10 +4,8 @@ import asyncio
 import json
 import logging
 import os
-import urllib.error
-import urllib.request
-from dataclasses import dataclass, replace
-from typing import Any, AsyncIterator, TypedDict
+from dataclasses import replace
+from typing import Any, AsyncIterator
 
 from inference.core.registry import import_plugin_class
 from inference.core.types import (
@@ -20,6 +18,8 @@ from inference.core.types import (
     VoiceLLMSessionConfig,
 )
 from inference.plugins.voice_llm.base import VoiceLLMPlugin
+from inference.plugins.voice_llm.persona.runtime import LocalTaskRuntime
+from inference.plugins.voice_llm.persona.supervisor import PendingSubAgentTask, PersonaSupervisor, SupervisorToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -89,85 +89,6 @@ PERSONA_AGENT_INSTRUCTIONS = """你是 CyberVerse 数字人 PersonaAgent，直�
 """
 
 
-class PersonaToolState(TypedDict, total=False):
-    call: ToolCall
-    session_id: str
-    result: dict[str, Any]
-
-
-@dataclass
-class PendingAsyncTask:
-    session_id: str
-    args: dict[str, Any]
-    user_request: str
-
-
-class PersonaTaskClient:
-    def __init__(self, server_url: str, internal_token: str = "") -> None:
-        self.server_url = server_url.rstrip("/")
-        self.internal_token = internal_token.strip()
-
-    def _headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"}
-        if self.internal_token:
-            headers["Authorization"] = f"Bearer {self.internal_token}"
-        return headers
-
-    async def _request(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        data = json.dumps(body or {}, ensure_ascii=False).encode("utf-8") if body is not None else None
-
-        def do_request() -> dict[str, Any]:
-            req = urllib.request.Request(
-                f"{self.server_url}{path}",
-                data=data,
-                method=method,
-                headers=self._headers(),
-            )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read()
-            if not raw:
-                return {}
-            return json.loads(raw.decode("utf-8"))
-
-        return await asyncio.to_thread(do_request)
-
-    async def create_task(self, session_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        user_request = str(args.get("user_request") or args.get("request") or "").strip()
-        if not user_request:
-            raise ValueError("create_task requires user_request")
-        payload = {
-            "user_request": user_request,
-            "title": str(args.get("title") or "").strip(),
-            "kind": str(args.get("kind") or "research").strip() or "research",
-        }
-        return await self._request("POST", f"/sessions/{session_id}/tasks", payload)
-
-    async def get_task(self, task_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"/tasks/{task_id}")
-
-    async def get_task_events(self, task_id: str, after_seq: int = 0, limit: int = 100) -> list[dict[str, Any]]:
-        events = await self._request("GET", f"/tasks/{task_id}/events?after_seq={after_seq}&limit={limit}")
-        raw_events = events.get("events", [])
-        return raw_events if isinstance(raw_events, list) else []
-
-    async def get_task_status(self, session_id: str) -> dict[str, Any]:
-        tasks = await self._request("GET", f"/sessions/{session_id}/tasks?limit=10")
-        active_statuses = {"queued", "running", "waiting_user"}
-        for task in tasks.get("tasks", []):
-            if task.get("status") in active_statuses:
-                events = await self._request("GET", f"/tasks/{task.get('id')}/events?after_seq=0&limit=20")
-                return {"task": task, "events": events.get("events", [])}
-        return {"task": None, "events": []}
-
-    async def cancel_task(self, session_id: str) -> dict[str, Any]:
-        status = await self.get_task_status(session_id)
-        task = status.get("task")
-        if not task:
-            return {"cancelled": False, "reason": "no_active_task"}
-        cancelled = await self._request("POST", f"/tasks/{task.get('id')}/cancel", {})
-        return {"cancelled": True, "task": cancelled}
-
-
 class PersonaAgentPlugin(VoiceLLMPlugin):
     """LangGraph-backed persona wrapper for an underlying realtime omni provider.
 
@@ -180,24 +101,17 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
     def __init__(self) -> None:
         self.model_provider = "doubao"
         self.model_plugin: VoiceLLMPlugin | None = None
-        self.task_client: PersonaTaskClient | None = None
+        self.task_runtime: LocalTaskRuntime | None = None
+        self.supervisor: PersonaSupervisor | None = None
         self.checkpoint_db_path = ""
         self.task_poll_interval_seconds = 1.0
         self.task_monitor_timeout_seconds = 1800.0
-        self._tool_graph = None
-        self._checkpoint_conn: Any | None = None
 
     async def initialize(self, config: PluginConfig) -> None:
         self.model_provider = str(config.params.get("model_provider") or "doubao").strip()
         if not self.model_provider or self.model_provider == "persona":
             raise ValueError("persona model_provider must reference a concrete omni provider")
 
-        server_url = str(
-            config.params.get("server_url")
-            or os.getenv("CYBERVERSE_SERVER_URL")
-            or "http://localhost:8080/api/v1"
-        )
-        internal_token = str(config.params.get("internal_token") or os.getenv("AGENT_INTERNAL_TOKEN") or "")
         self.checkpoint_db_path = str(
             config.params.get("checkpoint_db_path")
             or os.getenv("LANGGRAPH_CHECKPOINT_DB")
@@ -216,7 +130,6 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
             1.0,
             float(config.params.get("task_monitor_timeout_seconds") or self.task_monitor_timeout_seconds),
         )
-        self.task_client = PersonaTaskClient(server_url, internal_token)
 
         omni_config = config.shared.get("omni", {})
         if not isinstance(omni_config, dict):
@@ -241,14 +154,33 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
         if not isinstance(model_plugin, VoiceLLMPlugin):
             raise TypeError(f"{class_path} is not a VoiceLLMPlugin")
         self.model_plugin = model_plugin
-        self._tool_graph = await self._compile_tool_graph()
+
+        runtime_config = config.shared.get("runtime_config")
+        if not isinstance(runtime_config, dict):
+            runtime_config = {
+                "inference": {
+                    "llm": config.shared.get("llm", {}),
+                    "persona_agent": config.params,
+                }
+            }
+        self.task_runtime = LocalTaskRuntime(
+            runtime_config=runtime_config,
+            max_active_tasks_per_session=int(config.params.get("max_active_tasks_per_session") or 3),
+        )
+        self.supervisor = PersonaSupervisor(
+            runtime=self.task_runtime,
+            checkpoint_db_path=self.checkpoint_db_path,
+            task_poll_interval_seconds=self.task_poll_interval_seconds,
+            task_monitor_timeout_seconds=self.task_monitor_timeout_seconds,
+        )
+        await self.supervisor.initialize()
 
     async def shutdown(self) -> None:
         if self.model_plugin is not None:
             await self.model_plugin.shutdown()
-        if self._checkpoint_conn is not None:
-            await self._checkpoint_conn.close()
-            self._checkpoint_conn = None
+        if self.supervisor is not None:
+            await self.supervisor.shutdown()
+            self.supervisor = None
 
     async def check_voice(self, session_config: VoiceLLMSessionConfig | None = None) -> None:
         if self.model_plugin is None:
@@ -259,73 +191,10 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
         if self.model_plugin is not None:
             await self.model_plugin.interrupt()
 
-    async def _compile_tool_graph(self):
-        try:
-            from langgraph.graph import END, START, StateGraph
-        except Exception:
-            return None
-
-        graph = StateGraph(PersonaToolState)
-
-        async def execute_tool(state: PersonaToolState) -> PersonaToolState:
-            call = state["call"]
-            session_id = state["session_id"]
-            return {"result": await self._execute_tool_direct(call, session_id)}
-
-        graph.add_node("execute_tool", execute_tool)
-        graph.add_edge(START, "execute_tool")
-        graph.add_edge("execute_tool", END)
-        checkpointer = None
-        if self.checkpoint_db_path:
-            try:
-                import aiosqlite
-                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-                if self.checkpoint_db_path != ":memory:":
-                    os.makedirs(os.path.dirname(os.path.abspath(self.checkpoint_db_path)), exist_ok=True)
-                self._checkpoint_conn = await aiosqlite.connect(self.checkpoint_db_path)
-                checkpointer = AsyncSqliteSaver(self._checkpoint_conn)
-                await checkpointer.setup()
-            except Exception as exc:
-                logger.warning("persona checkpoint disabled: %s", exc)
-                if self._checkpoint_conn is not None:
-                    await self._checkpoint_conn.close()
-                    self._checkpoint_conn = None
-        if checkpointer is None:
-            return graph.compile()
-        return graph.compile(checkpointer=checkpointer)
-
-    async def _execute_tool(self, call: ToolCall, session_id: str) -> dict[str, Any]:
-        if self._tool_graph is None:
-            return await self._execute_tool_direct(call, session_id)
-        state = await self._tool_graph.ainvoke(
-            {"call": call, "session_id": session_id},
-            config={"configurable": {"thread_id": f"{session_id}:{call.id or call.name}"}},
-        )
-        return dict(state.get("result") or {})
-
-    async def _execute_tool_direct(self, call: ToolCall, session_id: str) -> dict[str, Any]:
-        name = call.name.strip()
-        args = call.arguments or {}
-        if name == "wait_for_more_input":
-            return {
-                "ok": True,
-                "waiting": True,
-                "partial_text": str(args.get("partial_text") or "").strip(),
-            }
-
-        if self.task_client is None:
-            raise RuntimeError("persona task client is not initialized")
-        if not session_id:
-            raise ValueError("persona tool execution requires session_id")
-
-        if name == "create_task":
-            return await self.task_client.create_task(session_id, args)
-        if name == "get_task_status":
-            return await self.task_client.get_task_status(session_id)
-        if name == "cancel_task":
-            return await self.task_client.cancel_task(session_id)
-        raise ValueError(f"unsupported persona tool: {name}")
+    async def _execute_tool(self, call: ToolCall, session_id: str) -> SupervisorToolResult:
+        if self.supervisor is None:
+            raise RuntimeError("persona supervisor is not initialized")
+        return await self.supervisor.handle_tool_call(call, session_id)
 
     @staticmethod
     def _clean_text(text: Any) -> str:
@@ -445,114 +314,14 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
             json.dumps(fields, ensure_ascii=False, sort_keys=True),
         )
 
-    @staticmethod
-    def _accepted_async_task_result() -> dict[str, Any]:
-        return {
-            "ok": True,
-            "accepted": True,
-            "status": "accepted",
-            "reply": "好的，请稍等，我现在开始处理。",
-        }
-
-    @staticmethod
-    def _is_terminal_task(task: dict[str, Any]) -> bool:
-        return str(task.get("status") or "") in {"completed", "failed", "cancelled"}
-
-    @staticmethod
-    def _latest_event_message(events: list[dict[str, Any]]) -> str:
-        for event in reversed(events):
-            message = str(event.get("message") or "").strip()
-            if message:
-                return message
-        return ""
-
-    @staticmethod
-    def _latest_artifact_id(events: list[dict[str, Any]]) -> str:
-        for event in reversed(events):
-            payload = event.get("payload")
-            if isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except json.JSONDecodeError:
-                    payload = {}
-            if isinstance(payload, dict):
-                artifact_id = str(payload.get("artifact_id") or "").strip()
-                if artifact_id:
-                    return artifact_id
-        return ""
-
-    async def _wait_for_task_terminal(self, task_id: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        if self.task_client is None:
-            raise RuntimeError("persona task client is not initialized")
-        deadline = asyncio.get_running_loop().time() + self.task_monitor_timeout_seconds
-        after_seq = 0
-        events: list[dict[str, Any]] = []
-        task = await self.task_client.get_task(task_id)
-        while True:
-            new_events = await self.task_client.get_task_events(task_id, after_seq=after_seq, limit=100)
-            for event in new_events:
-                events.append(event)
-                try:
-                    after_seq = max(after_seq, int(event.get("seq") or 0))
-                except (TypeError, ValueError):
-                    pass
-            task = await self.task_client.get_task(task_id)
-            if self._is_terminal_task(task):
-                return task, events
-            if asyncio.get_running_loop().time() >= deadline:
-                raise TimeoutError(f"task {task_id} did not finish before persona monitor timeout")
-            await asyncio.sleep(self.task_poll_interval_seconds)
-
-    def _task_completion_prompt(
-        self,
-        user_request: str,
-        task: dict[str, Any],
-        events: list[dict[str, Any]],
-    ) -> str:
-        status = str(task.get("status") or "").strip()
-        summary = str(task.get("result_summary") or "").strip() or self._latest_event_message(events)
-        artifact_id = self._latest_artifact_id(events)
-        artifact_hint = "资料已经在聊天侧生成，用户可以打开链接查看。" if artifact_id else "没有生成可打开的资料链接。"
-        return "\n".join(
-            [
-                "后台任务结果已经返回。请作为数字人用自然口语回复用户，保持一到两句话。",
-                f"用户原始请求：{user_request}",
-                f"任务状态：{status}",
-                f"结果摘要：{summary or '无'}",
-                artifact_hint,
-                "不要朗读内部字段名、JSON、任务 ID 或 artifact ID。",
-            ]
-        )
-
-    @staticmethod
-    def _task_start_failed_prompt(user_request: str, error: Exception) -> str:
-        return "\n".join(
-            [
-                "后台任务没有成功启动。请作为数字人用一句自然口语告诉用户稍后再试。",
-                f"用户原始请求：{user_request}",
-                f"错误原因：{error}",
-            ]
-        )
-
     async def _run_async_task(
         self,
-        pending: PendingAsyncTask,
+        pending: PendingSubAgentTask,
         injected: asyncio.Queue[VoiceLLMInputEvent],
     ) -> None:
-        if self.task_client is None:
-            raise RuntimeError("persona task client is not initialized")
-        try:
-            task = await self.task_client.create_task(pending.session_id, pending.args)
-            task_id = str(task.get("id") or "").strip()
-            if not task_id:
-                raise RuntimeError("task service did not return a task id")
-            final_task, events = await self._wait_for_task_terminal(task_id)
-            prompt = self._task_completion_prompt(pending.user_request, final_task, events)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.exception("persona async task failed")
-            prompt = self._task_start_failed_prompt(pending.user_request, exc)
+        if self.supervisor is None:
+            raise RuntimeError("persona supervisor is not initialized")
+        prompt = await self.supervisor.run_pending_task(pending)
         await injected.put(VoiceLLMInputEvent(text=prompt))
 
     @staticmethod
@@ -604,10 +373,10 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
         injected: asyncio.Queue[VoiceLLMInputEvent] = asyncio.Queue()
         pending_partials: list[str] = []
         turn_transcripts: list[str] = []
-        pending_task_starts: list[PendingAsyncTask] = []
+        pending_task_starts: list[PendingSubAgentTask] = []
         background_tasks: set[asyncio.Task[None]] = set()
 
-        def schedule_task_start(pending: PendingAsyncTask) -> None:
+        def schedule_task_start(pending: PendingSubAgentTask) -> None:
             task = asyncio.create_task(self._run_async_task(pending, injected))
             background_tasks.add(task)
             task.add_done_callback(background_tasks.discard)
@@ -638,7 +407,8 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
                                 pending_partials.append(partial_text)
                             turn_transcripts.clear()
                             try:
-                                result = await self._execute_tool(call, session_config.session_id)
+                                tool_result = await self._execute_tool(call, session_config.session_id)
+                                result = tool_result.result
                             except Exception as exc:
                                 logger.exception("persona wait tool call failed: %s", call.name)
                                 result = {"ok": False, "error": str(exc)}
@@ -664,21 +434,14 @@ class PersonaAgentPlugin(VoiceLLMPlugin):
                         pending_partials.clear()
                         turn_transcripts.clear()
 
-                        if name == "create_task":
-                            pending_task_starts.append(
-                                PendingAsyncTask(
-                                    session_id=session_config.session_id,
-                                    args=dict(effective_call.arguments or {}),
-                                    user_request=final_user_text,
-                                )
-                            )
-                            result = self._accepted_async_task_result()
-                        else:
-                            try:
-                                result = await self._execute_tool(effective_call, session_config.session_id)
-                            except Exception as exc:
-                                logger.exception("persona tool call failed: %s", call.name)
-                                result = {"ok": False, "error": str(exc)}
+                        try:
+                            tool_result = await self._execute_tool(effective_call, session_config.session_id)
+                            if tool_result.pending_task is not None:
+                                pending_task_starts.append(tool_result.pending_task)
+                            result = tool_result.result
+                        except Exception as exc:
+                            logger.exception("persona tool call failed: %s", call.name)
+                            result = {"ok": False, "error": str(exc)}
                         await injected.put(
                             VoiceLLMInputEvent(
                                 tool_result=ToolResult(

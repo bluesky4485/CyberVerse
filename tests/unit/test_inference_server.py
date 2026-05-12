@@ -177,33 +177,4 @@ def test_build_plugin_config_passes_omni_models_to_persona_plugins():
     assert plugin_config.plugin_name == "persona.persona"
     assert plugin_config.params == {"model_provider": "qwen_omni"}
     assert plugin_config.shared["omni"] == config["inference"]["omni"]
-
-
-def test_agent_worker_settings_default_to_embedded_endpoint():
-    server = _make_server({"inference": {}})
-
-    assert server._agent_worker_settings() == {
-        "enabled": True,
-        "host": "127.0.0.1",
-        "port": 8090,
-    }
-
-
-def test_agent_worker_settings_can_be_disabled():
-    server = _make_server(
-        {
-            "inference": {
-                "agent_worker": {
-                    "enabled": False,
-                    "host": "0.0.0.0",
-                    "port": 9009,
-                }
-            }
-        }
-    )
-
-    assert server._agent_worker_settings() == {
-        "enabled": False,
-        "host": "0.0.0.0",
-        "port": 9009,
-    }
+    assert plugin_config.shared["runtime_config"] == config

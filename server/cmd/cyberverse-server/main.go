@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/cyberverse/server/internal/agenttask"
@@ -73,17 +72,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to init agent task store: %v", err)
 	}
-	workerURL := strings.TrimSpace(os.Getenv("AGENT_WORKER_URL"))
-	if workerURL == "" {
-		workerURL = "http://localhost:8090"
-	}
-	taskSvc := agenttask.NewService(taskStore, wsHub, agenttask.Config{
-		Enabled:                  true,
-		WorkerURL:                workerURL,
-		InternalToken:            strings.TrimSpace(os.Getenv("AGENT_INTERNAL_TOKEN")),
-		MaxActiveTasksPerSession: 3,
-	})
-	log.Printf("Agent task service enabled by default: db=%s worker=%s", taskDBPath, workerURL)
+	taskSvc := agenttask.NewService(taskStore, wsHub)
+	log.Printf("Agent task projection store initialized: db=%s", taskDBPath)
 
 	// Create orchestrator (needs charStore for recording paths)
 	recorder := recording.NewVideoRecorder(cfg.Recording)

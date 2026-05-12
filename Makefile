@@ -1,4 +1,4 @@
-.PHONY: proto setup setup-agent test test-py test-go test-integration build inference server frontend agent-worker docker-up docker-down lint clean
+.PHONY: proto setup setup-agent test test-py test-go test-integration build inference server frontend docker-up docker-down lint clean
 
 # Locate Go 1.25: system package, user SDK install, or PATH fallback
 GO ?= $(shell \
@@ -62,11 +62,6 @@ server:
 
 frontend:
 	@if [ -n "$(NODE_BIN)" ]; then export PATH=$(NODE_BIN):$$PATH; fi; cd frontend && npm run dev
-
-agent-worker:
-	# Optional standalone worker for debugging; inference embeds this endpoint by default.
-	@set -a; [ -f ./.env ] && . ./.env; set +a; \
-	  uvicorn agent_runtime.server:app --host 127.0.0.1 --port 8090
 
 # Build
 build-go:

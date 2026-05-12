@@ -30,7 +30,7 @@ func TestStandardSystemPromptUsesGlobalWithoutCharacter(t *testing.T) {
 	}
 }
 
-func TestBuildVoiceLLMSessionConfigUsesOnlyOmniRolePrompt(t *testing.T) {
+func TestBuildVoiceLLMSessionConfigUsesPersonaAndOnlyOmniRolePrompt(t *testing.T) {
 	store, err := character.NewStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -52,8 +52,8 @@ func TestBuildVoiceLLMSessionConfigUsesOnlyOmniRolePrompt(t *testing.T) {
 	session := NewSession("s1", ModeOmni, char.ID)
 
 	got := orch.buildVoiceLLMSessionConfig(session, "s1")
-	if got.Provider != "qwen_omni" {
-		t.Fatalf("expected qwen_omni provider, got %q", got.Provider)
+	if got.Provider != "persona" {
+		t.Fatalf("expected persona provider, got %q", got.Provider)
 	}
 	if got.BotName != "晴天" || got.SpeakingStyle != "自然、简洁" {
 		t.Fatalf("expected voice-specific fields to stay separate, got %+v", got)
@@ -91,7 +91,7 @@ func TestBuildVoiceLLMSessionConfigUsesPersonaWhenAgentEnabled(t *testing.T) {
 	defer taskStore.Close()
 
 	orch := New(nil, nil, nil, nil, store)
-	orch.SetTaskService(agenttask.NewService(taskStore, nil, agenttask.Config{Enabled: true}))
+	orch.SetTaskService(agenttask.NewService(taskStore, nil))
 	session := NewSession("s1", ModeOmni, char.ID)
 
 	got := orch.buildVoiceLLMSessionConfig(session, "s1")

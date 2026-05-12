@@ -5,8 +5,10 @@
 ## 基本信息
 
 - 日期：`2026-05-11`
-- 状态：`当前工作区已实现主链路`
+- 状态：`已被 2026-05-12 PersonaAgent 本地 Supervisor/SubAgent Runtime 重构取代`
 - 主题：`Omni-only PersonaAgent + Go TaskService + LangGraph Agent Worker`
+
+> 2026-05-12 更新：后台任务执行已迁入 PersonaAgent 进程内的本地 Supervisor LangGraph 和 SubAgent Runtime。旧的 Agent Worker HTTP endpoint 不再由 inference 默认启动，本文后续关于 `agent_worker`、`AGENT_WORKER_URL`、Go 侧 HTTP dispatch 的内容仅作为 MVP 历史记录。
 
 ## 背景与问题
 

@@ -201,6 +201,9 @@ class FakeTaskClient:
         self.calls.append(("cancel_task", session_id, {}))
         return {"cancelled": True, "task": {"id": "task-1", "status": "cancelled"}}
 
+    async def shutdown(self):
+        pass
+
 
 async def make_persona(scenario, checkpoint_db_path):
     plugin = PersonaAgentPlugin()
@@ -223,7 +226,9 @@ async def make_persona(scenario, checkpoint_db_path):
             },
         )
     )
-    plugin.task_client = FakeTaskClient()
+    fake_runtime = FakeTaskClient()
+    plugin.task_runtime = fake_runtime
+    plugin.supervisor.runtime = fake_runtime
     return plugin
 
 
@@ -258,7 +263,7 @@ async def test_persona_agent_passthrough_chat(tmp_path):
     assert plugin.model_plugin.last_session_config.tools[1].name == "create_task"
     assert "PersonaAgent" in plugin.model_plugin.last_session_config.system_prompt
     assert "JSON" not in PERSONA_AGENT_INSTRUCTIONS
-    assert plugin.task_client.calls == []
+    assert plugin.task_runtime.calls == []
 
 
 @pytest.mark.asyncio
@@ -279,8 +284,8 @@ async def test_persona_agent_executes_hidden_tool_calls(tool_name, tmp_path):
 
     assert outputs[-1].transcript == f"{tool_name} ok"
     assert outputs[0].user_transcript
-    assert plugin.task_client.calls[0][0] == tool_name
-    assert plugin.task_client.calls[0][1] == "session-1"
+    assert plugin.task_runtime.calls[0][0] == tool_name
+    assert plugin.task_runtime.calls[0][1] == "session-1"
 
 
 @pytest.mark.asyncio
@@ -301,7 +306,7 @@ async def test_persona_agent_create_task_acks_then_runs_async_task(tmp_path):
     assert outputs[0].user_transcript == "今天知乎有哪些热门信息"
     assert outputs[1].transcript == "好的，请稍等。"
     assert outputs[-1].transcript == "查好了，资料已经整理好。"
-    assert plugin.task_client.calls[0] == (
+    assert plugin.task_runtime.calls[0] == (
         "create_task",
         "session-1",
         {
@@ -310,7 +315,7 @@ async def test_persona_agent_create_task_acks_then_runs_async_task(tmp_path):
             "kind": "research",
         },
     )
-    assert any(call[0] == "get_task_events" for call in plugin.task_client.calls)
+    assert any(call[0] == "get_task_events" for call in plugin.task_runtime.calls)
 
 
 @pytest.mark.asyncio
@@ -330,7 +335,7 @@ async def test_persona_agent_wait_tool_suppresses_output(tmp_path):
 
     assert len(outputs) == 1
     assert outputs[0].user_transcript == "我觉得..."
-    assert plugin.task_client.calls == []
+    assert plugin.task_runtime.calls == []
 
 
 def test_persona_event_logs_keep_stream_deltas_out_of_info(caplog):
@@ -379,7 +384,7 @@ async def test_persona_agent_merges_waited_partial_into_create_task(tmp_path):
     assert outputs[1].user_transcript == "今天知乎有哪些热门信息"
     assert outputs[2].transcript == "好的，请稍等。"
     assert outputs[-1].transcript == "查好了，资料已经整理好。"
-    assert plugin.task_client.calls[0] == (
+    assert plugin.task_runtime.calls[0] == (
         "create_task",
         "session-1",
         {

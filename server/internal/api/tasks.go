@@ -12,12 +12,6 @@ import (
 	"github.com/cyberverse/server/internal/agenttask"
 )
 
-type createTaskRequest struct {
-	Kind        string `json:"kind"`
-	Title       string `json:"title"`
-	UserRequest string `json:"user_request"`
-}
-
 type internalTaskEventRequest struct {
 	EventType string           `json:"event_type"`
 	Status    agenttask.Status `json:"status"`
@@ -32,40 +26,6 @@ type internalTaskArtifactRequest struct {
 	MimeType string          `json:"mime_type"`
 	Content  string          `json:"content"`
 	Metadata json.RawMessage `json:"metadata"`
-}
-
-func (r *Router) handleCreateTask(w http.ResponseWriter, req *http.Request) {
-	if r.taskSvc == nil || !r.taskSvc.Enabled() {
-		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "agent task service is disabled"})
-		return
-	}
-	sessionID := req.PathValue("id")
-	session, err := r.sessionMgr.Get(sessionID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
-		return
-	}
-	var body createTaskRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid JSON: " + err.Error()})
-		return
-	}
-	if strings.TrimSpace(body.UserRequest) == "" {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "user_request is required"})
-		return
-	}
-	task, err := r.taskSvc.CreateTask(req.Context(), agenttask.CreateTaskInput{
-		SessionID:   sessionID,
-		CharacterID: session.CharacterID,
-		Kind:        body.Kind,
-		Title:       body.Title,
-		UserRequest: body.UserRequest,
-	})
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusAccepted, task)
 }
 
 func (r *Router) handleListSessionTasks(w http.ResponseWriter, req *http.Request) {
@@ -113,19 +73,6 @@ func (r *Router) handleListTaskEvents(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
-}
-
-func (r *Router) handleCancelTask(w http.ResponseWriter, req *http.Request) {
-	if r.taskSvc == nil || !r.taskSvc.Enabled() {
-		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "agent task service is disabled"})
-		return
-	}
-	task, err := r.taskSvc.CancelTask(req.Context(), req.PathValue("task_id"))
-	if err != nil {
-		writeTaskError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, task)
 }
 
 func (r *Router) handleGetTaskArtifact(w http.ResponseWriter, req *http.Request) {

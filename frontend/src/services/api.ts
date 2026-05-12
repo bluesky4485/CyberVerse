@@ -123,23 +123,12 @@ export interface AgentTaskEvent {
   created_at: string
 }
 
-export async function createTask(sessionId: string, userRequest: string, kind = 'research', title = ''): Promise<AgentTask> {
-  return request(`/sessions/${sessionId}/tasks`, {
-    method: 'POST',
-    body: JSON.stringify({ user_request: userRequest, kind, title }),
-  })
-}
-
 export async function listSessionTasks(sessionId: string): Promise<{ tasks: AgentTask[] }> {
   return request(`/sessions/${sessionId}/tasks`)
 }
 
 export async function getTaskEvents(taskId: string, afterSeq = 0): Promise<{ events: AgentTaskEvent[] }> {
   return request(`/tasks/${taskId}/events?after_seq=${afterSeq}`)
-}
-
-export async function cancelTask(taskId: string): Promise<AgentTask> {
-  return request(`/tasks/${taskId}/cancel`, { method: 'POST' })
 }
 
 // ── Conversation History ──

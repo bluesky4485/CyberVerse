@@ -31,14 +31,16 @@ def test_agent_llm_uses_inference_llm_default_config():
     assert llm_config.extra_body == {"enable_thinking": False}
 
 
-def test_agent_llm_worker_override_keeps_provider_config_defaults():
+def test_agent_llm_persona_override_keeps_provider_config_defaults():
     config = {
         "inference": {
-            "agent_worker": {
-                "llm": {
-                    "provider": "qwen",
-                    "model": "qwen-max",
-                    "temperature": 0.1,
+            "persona": {
+                "persona": {
+                    "llm": {
+                        "provider": "qwen",
+                        "model": "qwen-max",
+                        "temperature": 0.1,
+                    }
                 }
             },
             "llm": {
@@ -60,7 +62,6 @@ def test_agent_llm_worker_override_keeps_provider_config_defaults():
     assert llm_config.model == "qwen-max"
     assert llm_config.temperature == 0.1
     assert llm_config.extra_body == {"enable_thinking": False}
-
 
 class FakeChatCompletions:
     def __init__(self, replies):
