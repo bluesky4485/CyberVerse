@@ -91,4 +91,4 @@ markers = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["inference*", "agent_runtime*"]
+include = ["inference*"]
