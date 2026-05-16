@@ -13,7 +13,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'landing',
-      component: () => import('../pages/LandingPage.vue'),
+      redirect: '/kanshan',
     },
     {
       path: '/kanshan',
