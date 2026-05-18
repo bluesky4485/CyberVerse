@@ -418,3 +418,4 @@ GNU General Public License v3.0，详见 [LICENSE](LICENSE)。
 
 - [SoulX-LiveAct](https://github.com/Soul-AILab/SoulX-LiveAct) - Soul AI Lab 提供的 Avatar 模型
 - [Pion](https://github.com/pion/webrtc) — Go WebRTC 实现
+- [Linux.do](https://linux.do/)
