@@ -26,6 +26,12 @@
 >
 > **必要なのはたった一枚の写真。CyberVerse がその存在を動き出させます。**
 
+## デジタルヒューマン Agent とは？
+
+<p align="center">
+  <a href="docs/assets/digital-human-agent.jpeg"><img src="docs/assets/digital-human-agent.jpeg" alt="CyberVerse デジタルヒューマン Agent" width="100%"/></a>
+</p>
+
 ## デモ
 <p align="center"><em>以下のキャラクターはデモ例です。CyberVerse に同梱されておらず、商用利用向けには提供されません。</em></p>
 

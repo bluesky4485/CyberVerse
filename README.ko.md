@@ -27,6 +27,12 @@
 >
 > **사진 한 장이면 됩니다. CyberVerse가 그 존재를 살아 움직이게 합니다.**
 
+## 디지털 휴먼 Agent란?
+
+<p align="center">
+  <a href="docs/assets/digital-human-agent.jpeg"><img src="docs/assets/digital-human-agent.jpeg" alt="CyberVerse 디지털 휴먼 Agent" width="100%"/></a>
+</p>
+
 ## 데모
 <p align="center"><em>아래 캐릭터는 데모 예시일 뿐입니다. CyberVerse에 내장되어 제공되지 않으며, 상업적 용도로 제공되지 않습니다.</em></p>
 

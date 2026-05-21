@@ -1,5 +1,5 @@
 <h1 align="center">CyberVerse</h1>
-<p align="center"><em>CyberVerse is an open-source <strong>real-time audio/video agent platform</strong>. It uses WebRTC, persona memory, tools, RAG, and optional digital-human video capabilities to help you build AI agents centered on voice interaction.</em></p>
+<p align="center"><em>CyberVerse is an open-source <strong>real-time digital-human Agent framework</strong>. It uses WebRTC, persona memory, tools, RAG, and optional digital-human video capabilities to help you build AI agents centered on voice interaction.</em></p>
 
 <p align="center">
   <a href="README.md"><strong>English</strong></a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a>
@@ -26,6 +26,12 @@
 > Or maybe there's a character you've always wished you could bring to life?
 >
 > **Just one photo. CyberVerse makes them alive.**
+
+## What is a Digital-Human Agent?
+
+<p align="center">
+  <a href="docs/assets/digital-human-agent.jpeg"><img src="docs/assets/digital-human-agent.jpeg" alt="CyberVerse digital-human Agent" width="100%"/></a>
+</p>
 
 ## Demo
 <p align="center"><em>The following characters are demo examples only. They are not bundled with CyberVerse and are not provided for commercial use.</em></p>

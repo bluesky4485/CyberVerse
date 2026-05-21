@@ -1,5 +1,5 @@
 <h1 align="center">CyberVerse</h1>
-<p align="center"><em>CyberVerse 是一个开源的<strong>实时音视频 Agent 平台</strong>。它基于 WebRTC、人设记忆、工具、RAG 和可选的数字人视频能力，帮助你构建以语音交互为核心的 AI Agent。</em></p>
+<p align="center"><em>CyberVerse 是一个开源的<strong>实时数字人 Agent 框架</strong>。它基于 WebRTC、人设记忆、工具、RAG 和可选的数字人视频能力，帮助你构建以语音交互为核心的 AI Agent。</em></p>
 
 <p align="center">
   <a href="README.md">English</a> · <a href="README.zh-CN.md"><strong>简体中文</strong></a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a>
@@ -26,6 +26,12 @@
 > 又或者，你一直想把某个角色带到现实世界中？
 >
 > **只需一张照片，CyberVerse 就能让 TA 「活」过来。**
+
+## 什么是数字人 Agent？
+
+<p align="center">
+  <a href="docs/assets/digital-human-agent.jpeg"><img src="docs/assets/digital-human-agent.jpeg" alt="CyberVerse 数字人 Agent" width="100%"/></a>
+</p>
 
 ## 演示
 <p align="center"><em>以下角色仅用于 Demo 演示，不会随 CyberVerse 内置提供，也不用于商业用途。</em></p>
