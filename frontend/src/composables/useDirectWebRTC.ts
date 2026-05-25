@@ -31,11 +31,21 @@ let frameArrivalTimes: number[] = []
 const AV_SEGMENT_TIMELINE_LIMIT = 80
 const AV_SEGMENT_MATCH_TOLERANCE_MS = 80
 const AV_MARKER_MATCH_TOLERANCE_MS = 120
+const AV_SYNC_FEEDBACK_MIN_EXCESS_VIDEO_LAG_MS = 150
+const AV_SYNC_FEEDBACK_MIN_JB_DELTA_MS = 120
+const AV_SYNC_FEEDBACK_CONSECUTIVE_SEGMENTS = 3
+const AV_SYNC_FEEDBACK_THROTTLE_MS = 1500
 let avSegmentTimelines: AVSegmentTimeline[] = []
 let avSegmentMediaBaseTurnSeq: number | null = null
 let avSegmentMediaBaseMs: number | null = null
 let avSegmentPresentationLoggingEnabled = false
 let lastPresentedSegmentKey = ''
+let avSyncFeedbackSender: ((msg: any) => void) | null = null
+let latestJitterBufferDelayDeltaMs: number | null = null
+let avSyncFeedbackTurnSeq: number | null = null
+let avSyncFeedbackBaselineLagMs: number | null = null
+let avSyncFeedbackConsecutiveLateSegments = 0
+let avSyncFeedbackLastSentAtMs = 0
 let avCalibrationEnabled = false
 let avCalibrationCanvas: HTMLCanvasElement | null = null
 let avCalibrationCtx: CanvasRenderingContext2D | null = null
@@ -76,10 +86,19 @@ function resetAVSegmentDiagnostics() {
   avSegmentMediaBaseTurnSeq = null
   avSegmentMediaBaseMs = null
   lastPresentedSegmentKey = ''
+  resetAVSyncFeedback()
   avCalibrationVideoHot = false
   pendingAVCalibrationAudioOutputTimes = []
   pendingAVCalibrationVideoEvents = []
   avCalibrationMarkers.clear()
+}
+
+function resetAVSyncFeedback() {
+  latestJitterBufferDelayDeltaMs = null
+  avSyncFeedbackTurnSeq = null
+  avSyncFeedbackBaselineLagMs = null
+  avSyncFeedbackConsecutiveLateSegments = 0
+  avSyncFeedbackLastSentAtMs = 0
 }
 
 function segmentKey(seg: AVSegmentTimeline): string {
@@ -264,6 +283,59 @@ function recordAVCalibrationVideoFrame(
   maybeLogAVCalibrationMarker(marker)
 }
 
+function roundedMs(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
+function maybeSendAVSyncFeedback(seg: AVSegmentTimeline, mediaInTurnMs: number) {
+  if (!avSyncFeedbackSender) return
+  if (latestJitterBufferDelayDeltaMs === null || !Number.isFinite(latestJitterBufferDelayDeltaMs)) return
+
+  const videoPresentationLagMs = mediaInTurnMs - seg.mediaStartMs
+  if (avSyncFeedbackTurnSeq !== seg.turnSeq) {
+    avSyncFeedbackTurnSeq = seg.turnSeq
+    avSyncFeedbackBaselineLagMs = videoPresentationLagMs
+    avSyncFeedbackConsecutiveLateSegments = 0
+    avSyncFeedbackLastSentAtMs = 0
+    return
+  }
+  if (avSyncFeedbackBaselineLagMs === null) {
+    avSyncFeedbackBaselineLagMs = videoPresentationLagMs
+    return
+  }
+
+  const excessVideoLagMs = videoPresentationLagMs - avSyncFeedbackBaselineLagMs
+  const videoLate =
+    excessVideoLagMs >= AV_SYNC_FEEDBACK_MIN_EXCESS_VIDEO_LAG_MS &&
+    latestJitterBufferDelayDeltaMs >= AV_SYNC_FEEDBACK_MIN_JB_DELTA_MS
+
+  if (!videoLate) {
+    avSyncFeedbackConsecutiveLateSegments = 0
+    return
+  }
+
+  avSyncFeedbackConsecutiveLateSegments++
+  if (avSyncFeedbackConsecutiveLateSegments < AV_SYNC_FEEDBACK_CONSECUTIVE_SEGMENTS) return
+
+  const now = Date.now()
+  if (now - avSyncFeedbackLastSentAtMs < AV_SYNC_FEEDBACK_THROTTLE_MS) return
+  avSyncFeedbackLastSentAtMs = now
+
+  avSyncFeedbackSender({
+    type: 'av_sync_feedback',
+    turn_seq: seg.turnSeq,
+    segment_seq: seg.segmentSeq,
+    video_presentation_lag_ms: roundedMs(videoPresentationLagMs),
+    excess_video_lag_ms: roundedMs(excessVideoLagMs),
+    jitter_buffer_delta_ms: roundedMs(latestJitterBufferDelayDeltaMs),
+    likely: 'video_late_audio_leads',
+  })
+  console.log(
+    `[DirectRTC][${ts()}] AV drift feedback turn=${seg.turnSeq} segment=${seg.segmentSeq}` +
+      ` excessVideoLag=${roundedMs(excessVideoLagMs)}ms JBDelta=${roundedMs(latestJitterBufferDelayDeltaMs)}ms`
+  )
+}
+
 function recordAVSegmentPresentation(
   el: HTMLVideoElement,
   rvfcNowMs: DOMHighResTimeStamp,
@@ -301,6 +373,7 @@ function recordAVSegmentPresentation(
       ` mediaInTurn=${Math.round(mediaInTurnMs)}ms expected=${seg.mediaStartMs}-${seg.mediaStartMs + seg.durationMs}ms` +
       ` rvfcMedia=${mediaTimeSeconds.toFixed(3)}s presentedFrames=${presentedFrames}`
   )
+  maybeSendAVSyncFeedback(seg, mediaInTurnMs)
 }
 
 const avCalibrationWorkletSource = `
@@ -565,6 +638,7 @@ export function useDirectWebRTC() {
     lastAVSyncLogAtMs = 0
     resetAVSegmentDiagnostics()
     if (!enabled) {
+      resetAVSyncFeedback()
       debugState.value.avSync = null
       debugState.value.segmentTimeline = null
     }
@@ -851,19 +925,23 @@ export function useDirectWebRTC() {
       debugState.value.network = net
       if (!avSyncLoggingEnabled) {
         debugState.value.avSync = null
+        latestJitterBufferDelayDeltaMs = null
         return
       }
       const avSync = estimateAVPlayoutFromStats(stats, avPlayoutEstimator)
       debugState.value.avSync = avSync
       if (!avSync.active || avSync.jitterBufferDelayDeltaMs === null) {
+        latestJitterBufferDelayDeltaMs = null
         return
       }
+      latestJitterBufferDelayDeltaMs = avSync.jitterBufferDelayDeltaMs
       const now = Date.now()
       if (now - lastAVSyncLogAtMs >= 1000) {
         lastAVSyncLogAtMs = now
         console.log(`[DirectRTC][${ts()}] ${formatJitterBufferDelta(avSync)}`)
       }
     } catch {
+      latestJitterBufferDelayDeltaMs = null
       // getStats can fail during reconnection, ignore
     }
   }
@@ -887,6 +965,7 @@ export function useDirectWebRTC() {
     error.value = ''
     resetState()
     sendSignaling = signalingFn
+    avSyncFeedbackSender = signalingFn
     pendingIceServers = null
     sentWebrtcReady = false
     needsPlaybackGesture.value = false
@@ -1181,6 +1260,7 @@ export function useDirectWebRTC() {
     pc?.close()
     pc = null
     sendSignaling = null
+    avSyncFeedbackSender = null
     signalingChain = Promise.resolve()
     pendingIceServers = null
     dedicatedAudioOutput = false

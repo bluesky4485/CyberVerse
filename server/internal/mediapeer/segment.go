@@ -63,13 +63,23 @@ type AVSegment struct {
 	Fence             chan struct{}
 }
 
+const defaultVP8BitrateKbps = 2000
+
 // EncodeRGBChunkToVP8Samples encodes a contiguous RGB24 buffer to VP8 samples.
 func EncodeRGBChunkToVP8Samples(rgb []byte, width, height, numFrames, fps int) ([]media.Sample, error) {
+	return EncodeRGBChunkToVP8SamplesWithBitrate(rgb, width, height, numFrames, fps, defaultVP8BitrateKbps)
+}
+
+// EncodeRGBChunkToVP8SamplesWithBitrate encodes a contiguous RGB24 buffer to VP8 samples.
+func EncodeRGBChunkToVP8SamplesWithBitrate(rgb []byte, width, height, numFrames, fps int, bitrateKbps int) ([]media.Sample, error) {
 	if numFrames <= 0 || width <= 0 || height <= 0 {
 		return nil, nil
 	}
 	if fps <= 0 {
 		fps = 25
+	}
+	if bitrateKbps <= 0 {
+		bitrateKbps = defaultVP8BitrateKbps
 	}
 	want := width * height * 3 * numFrames
 	if len(rgb) < want {
@@ -83,6 +93,9 @@ func EncodeRGBChunkToVP8Samples(rgb []byte, width, height, numFrames, fps int) (
 	}
 
 	// IVF VP8 via libvpx; single-process encode per chunk (latency vs simplicity tradeoff).
+	bitrateArg := fmt.Sprintf("%dk", bitrateKbps)
+	bufSizeArg := fmt.Sprintf("%dk", bitrateKbps*2)
+	keyframeInterval := fmt.Sprintf("%d", numFrames)
 	cmd := exec.Command(
 		"ffmpeg",
 		"-loglevel", "error",
@@ -96,8 +109,11 @@ func EncodeRGBChunkToVP8Samples(rgb []byte, width, height, numFrames, fps int) (
 		"-deadline", "realtime",
 		"-cpu-used", "8",
 		"-row-mt", "1",
-		"-b:v", "2M",
-		"-g", "1", // All-Intra: every frame is a keyframe; eliminates reference-frame corruption
+		"-b:v", bitrateArg,
+		"-maxrate", bitrateArg,
+		"-bufsize", bufSizeArg,
+		"-g", keyframeInterval, // Each restarted chunk starts with a keyframe; keep later frames as inter frames.
+		"-keyint_min", keyframeInterval,
 		"-an",
 		"-f", "ivf",
 		"pipe:1",

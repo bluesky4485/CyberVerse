@@ -201,7 +201,8 @@ const emptyDebugState = (): AVSyncDebugState => ({
 })
 
 type InboundTimingStats = {
-  jitterBufferDelayMs: number | null
+  jitterBufferDelaySeconds: number | null
+  jitterBufferEmittedCount: number
   estimatedPlayoutTimestampMs: number | null
   packetsReceived: number
   framesDecoded: number
@@ -214,6 +215,10 @@ export type AVPlayoutEstimatorState = {
   audioPacketsReceived: number | null
   videoPacketsReceived: number | null
   videoFramesDecoded: number | null
+  audioJitterBufferDelaySeconds: number | null
+  audioJitterBufferEmittedCount: number | null
+  videoJitterBufferDelaySeconds: number | null
+  videoJitterBufferEmittedCount: number | null
   lastObservedOffsetMs: number | null
 }
 
@@ -222,6 +227,10 @@ export function createAVPlayoutEstimatorState(): AVPlayoutEstimatorState {
     audioPacketsReceived: null,
     videoPacketsReceived: null,
     videoFramesDecoded: null,
+    audioJitterBufferDelaySeconds: null,
+    audioJitterBufferEmittedCount: null,
+    videoJitterBufferDelaySeconds: null,
+    videoJitterBufferEmittedCount: null,
     lastObservedOffsetMs: null,
   }
 }
@@ -230,24 +239,20 @@ function roundMs(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-function readJitterBufferDelayMs(report: any): number | null {
-  const emittedCount = Number(report.jitterBufferEmittedCount ?? 0)
-  if (!Number.isFinite(emittedCount) || emittedCount <= 0) {
-    return null
-  }
-
+function readJitterBufferDelaySeconds(report: any): number | null {
   const delaySeconds = Number(report.jitterBufferDelay)
   if (!Number.isFinite(delaySeconds)) {
     return null
   }
 
-  return roundMs((delaySeconds / emittedCount) * 1000)
+  return delaySeconds
 }
 
 function readInboundTimingStats(report: any): InboundTimingStats {
   const estimatedPlayoutTimestamp = Number(report.estimatedPlayoutTimestamp)
   return {
-    jitterBufferDelayMs: readJitterBufferDelayMs(report),
+    jitterBufferDelaySeconds: readJitterBufferDelaySeconds(report),
+    jitterBufferEmittedCount: Number(report.jitterBufferEmittedCount ?? 0),
     estimatedPlayoutTimestampMs: Number.isFinite(estimatedPlayoutTimestamp)
       ? estimatedPlayoutTimestamp
       : null,
@@ -261,6 +266,31 @@ function preferInboundTimingStats(current: InboundTimingStats | null, next: Inbo
   const currentScore = current.packetsReceived + current.framesDecoded
   const nextScore = next.packetsReceived + next.framesDecoded
   return nextScore >= currentScore ? next : current
+}
+
+function computeWindowedJitterBufferDelayMs(
+  currentDelaySeconds: number | null,
+  currentEmittedCount: number,
+  previousDelaySeconds: number | null,
+  previousEmittedCount: number | null,
+): number | null {
+  if (
+    currentDelaySeconds === null ||
+    previousDelaySeconds === null ||
+    previousEmittedCount === null ||
+    !Number.isFinite(currentEmittedCount) ||
+    !Number.isFinite(previousEmittedCount) ||
+    currentEmittedCount <= previousEmittedCount
+  ) {
+    return null
+  }
+
+  const delayDeltaSeconds = currentDelaySeconds - previousDelaySeconds
+  const emittedDelta = currentEmittedCount - previousEmittedCount
+  if (!Number.isFinite(delayDeltaSeconds) || delayDeltaSeconds < 0 || emittedDelta <= 0) {
+    return null
+  }
+  return roundMs((delayDeltaSeconds / emittedDelta) * 1000)
 }
 
 export function estimateAVPlayoutFromStats(
@@ -285,8 +315,22 @@ export function estimateAVPlayoutFromStats(
     }
   })
 
-  const videoJitterBufferDelayMs = timing.video?.jitterBufferDelayMs ?? null
-  const audioJitterBufferDelayMs = timing.audio?.jitterBufferDelayMs ?? null
+  const videoJitterBufferDelayMs = timing.video
+    ? computeWindowedJitterBufferDelayMs(
+      timing.video.jitterBufferDelaySeconds,
+      timing.video.jitterBufferEmittedCount,
+      state.videoJitterBufferDelaySeconds,
+      state.videoJitterBufferEmittedCount,
+    )
+    : null
+  const audioJitterBufferDelayMs = timing.audio
+    ? computeWindowedJitterBufferDelayMs(
+      timing.audio.jitterBufferDelaySeconds,
+      timing.audio.jitterBufferEmittedCount,
+      state.audioJitterBufferDelaySeconds,
+      state.audioJitterBufferEmittedCount,
+    )
+    : null
   const videoEstimatedPlayoutTimestampMs = timing.video?.estimatedPlayoutTimestampMs ?? null
   const audioEstimatedPlayoutTimestampMs = timing.audio?.estimatedPlayoutTimestampMs ?? null
   const rawEstimatedPlayoutOffsetMs =
@@ -310,10 +354,14 @@ export function estimateAVPlayoutFromStats(
 
   if (timing.audio) {
     state.audioPacketsReceived = timing.audio.packetsReceived
+    state.audioJitterBufferDelaySeconds = timing.audio.jitterBufferDelaySeconds
+    state.audioJitterBufferEmittedCount = timing.audio.jitterBufferEmittedCount
   }
   if (timing.video) {
     state.videoPacketsReceived = timing.video.packetsReceived
     state.videoFramesDecoded = timing.video.framesDecoded
+    state.videoJitterBufferDelaySeconds = timing.video.jitterBufferDelaySeconds
+    state.videoJitterBufferEmittedCount = timing.video.jitterBufferEmittedCount
   }
 
   let estimatedPlayoutOffsetMs: number | null = null
@@ -378,7 +426,7 @@ export function formatAVPlayoutEstimate(estimate: AVPlayoutEstimate): string {
     : ''
   return (
     offset +
-    `| JBDelta~${value(estimate.jitterBufferDelayDeltaMs)}ms ` +
+    `| JBDelta(window)~${value(estimate.jitterBufferDelayDeltaMs)}ms ` +
     `(video_jb~${value(estimate.videoJitterBufferDelayMs)}ms audio_jb~${value(estimate.audioJitterBufferDelayMs)}ms) ` +
     `| source=${estimate.source} reason=${estimate.reason}${rawOffset}`
   )
@@ -387,7 +435,7 @@ export function formatAVPlayoutEstimate(estimate: AVPlayoutEstimate): string {
 export function formatJitterBufferDelta(estimate: AVPlayoutEstimate): string {
   const value = (n: number | null) => (n === null ? 'N/A' : n.toFixed(1))
   return (
-    `JBDelta~${value(estimate.jitterBufferDelayDeltaMs)}ms ` +
+    `JBDelta(window)~${value(estimate.jitterBufferDelayDeltaMs)}ms ` +
     `(video_jb~${value(estimate.videoJitterBufferDelayMs)}ms audio_jb~${value(estimate.audioJitterBufferDelayMs)}ms)`
   )
 }

@@ -24,3 +24,10 @@ func cappedRTPGap(wall time.Duration) time.Duration {
 	}
 	return wall
 }
+
+func rtpGapToSkip(wallGap, frameDur time.Duration) time.Duration {
+	if wallGap <= rtpGapThreshold(frameDur) {
+		return 0
+	}
+	return cappedRTPGap(wallGap)
+}

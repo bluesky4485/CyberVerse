@@ -26,20 +26,26 @@ type Client struct {
 
 // WSMessage represents a message received from a WebSocket client.
 type WSMessage struct {
-	Type        string  `json:"type"`
-	Text        string  `json:"text,omitempty"`
-	SDP         string  `json:"sdp,omitempty"`
-	Candidate   string  `json:"candidate,omitempty"`
-	SDPMid      string  `json:"sdp_mid,omitempty"`
-	SDPMLine    *uint16 `json:"sdp_mline_index,omitempty"`
-	Source      string  `json:"source,omitempty"`
-	Mime        string  `json:"mime,omitempty"`
-	Data        string  `json:"data,omitempty"`
-	Width       int32   `json:"width,omitempty"`
-	Height      int32   `json:"height,omitempty"`
-	TimestampMS int64   `json:"timestamp_ms,omitempty"`
-	FrameSeq    int64   `json:"frame_seq,omitempty"`
-	Enabled     bool    `json:"enabled,omitempty"`
+	Type                   string  `json:"type"`
+	Text                   string  `json:"text,omitempty"`
+	SDP                    string  `json:"sdp,omitempty"`
+	Candidate              string  `json:"candidate,omitempty"`
+	SDPMid                 string  `json:"sdp_mid,omitempty"`
+	SDPMLine               *uint16 `json:"sdp_mline_index,omitempty"`
+	Source                 string  `json:"source,omitempty"`
+	Mime                   string  `json:"mime,omitempty"`
+	Data                   string  `json:"data,omitempty"`
+	Width                  int32   `json:"width,omitempty"`
+	Height                 int32   `json:"height,omitempty"`
+	TimestampMS            int64   `json:"timestamp_ms,omitempty"`
+	FrameSeq               int64   `json:"frame_seq,omitempty"`
+	Enabled                bool    `json:"enabled,omitempty"`
+	TurnSeq                uint64  `json:"turn_seq,omitempty"`
+	SegmentSeq             int64   `json:"segment_seq,omitempty"`
+	VideoPresentationLagMS float64 `json:"video_presentation_lag_ms,omitempty"`
+	ExcessVideoLagMS       float64 `json:"excess_video_lag_ms,omitempty"`
+	JitterBufferDeltaMS    float64 `json:"jitter_buffer_delta_ms,omitempty"`
+	Likely                 string  `json:"likely,omitempty"`
 }
 
 // ReadPump reads messages from the WebSocket and dispatches them via onMessage.

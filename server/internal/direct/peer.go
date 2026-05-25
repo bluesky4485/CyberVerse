@@ -53,6 +53,17 @@ func directVoiceTrace(event string, label string, format string, args ...any) {
 // SignalingFunc sends a signaling message to the browser via the WebSocket hub.
 type SignalingFunc func(sessionID string, msg map[string]any)
 
+const (
+	defaultDirectVideoBitrateKbps = 1800
+	minDirectVideoBitrateKbps     = 500
+	maxDirectVideoBitrateKbps     = 1800
+	videoBitrateSafetyPercent     = 65
+
+	maxAudioDelayMS          int64 = 350
+	audioDelayStepMS         int64 = 60
+	audioDelayFeedbackMaxAge       = 4 * time.Second
+)
+
 // DirectPeer is a P2P WebRTC media peer using pion/webrtc directly.
 type DirectPeer struct {
 	sessionID   string
@@ -91,6 +102,15 @@ type DirectPeer struct {
 	playbackEpoch          atomic.Uint64
 	avCalibrationEnabled   atomic.Bool
 	avCalibrationMarkerSeq atomic.Int64
+	targetBitrateBps       atomic.Int64
+
+	audioDelayMu           sync.Mutex
+	audioDelayTargetMS     int64
+	audioDelayCurrentMS    int64
+	audioDelayPCM          []byte
+	audioDelaySampleRate   int
+	audioDelayEpoch        uint64
+	audioDelayLastFeedback time.Time
 }
 
 // NewDirectPeer creates a new P2P WebRTC peer for the given session.
@@ -237,9 +257,11 @@ func (p *DirectPeer) Connect(ctx context.Context) error {
 					return
 				}
 				estimator.OnTargetBitrateChange(func(bitrate int) {
+					p.targetBitrateBps.Store(int64(bitrate))
 					log.Printf("[DirectPeer] session=%s GCC target bitrate: %d kbps", p.sessionID, bitrate/1000)
 				})
-			case <-p.connected:
+			case <-time.After(10 * time.Second):
+				log.Printf("[DirectPeer] session=%s GCC estimator unavailable; using default VP8 bitrate", p.sessionID)
 			}
 		}()
 	}
@@ -250,6 +272,48 @@ func (p *DirectPeer) Connect(ctx context.Context) error {
 // SetAVCalibrationEnabled toggles explicit in-band AV marker injection for diagnostics.
 func (p *DirectPeer) SetAVCalibrationEnabled(enabled bool) {
 	p.avCalibrationEnabled.Store(enabled)
+}
+
+// HandleAVSyncFeedback updates the server-side audio delay target from browser diagnostics.
+func (p *DirectPeer) HandleAVSyncFeedback(turnSeq uint64, excessVideoLagMS, jitterBufferDeltaMS float64, likely string) {
+	if likely != "video_late_audio_leads" {
+		return
+	}
+	currentEpoch := p.playbackEpoch.Load()
+	if turnSeq > 0 && currentEpoch > 0 && turnSeq != currentEpoch {
+		return
+	}
+	if math.IsNaN(excessVideoLagMS) || math.IsInf(excessVideoLagMS, 0) ||
+		math.IsNaN(jitterBufferDeltaMS) || math.IsInf(jitterBufferDeltaMS, 0) {
+		return
+	}
+	if excessVideoLagMS <= 0 || jitterBufferDeltaMS <= 0 {
+		return
+	}
+
+	wanted := int64(math.Round(math.Min(excessVideoLagMS, jitterBufferDeltaMS)))
+	if wanted < 0 {
+		wanted = 0
+	}
+	if wanted > maxAudioDelayMS {
+		wanted = maxAudioDelayMS
+	}
+
+	p.audioDelayMu.Lock()
+	p.audioDelayTargetMS = wanted
+	p.audioDelayLastFeedback = time.Now()
+	current := p.audioDelayCurrentMS
+	p.audioDelayMu.Unlock()
+
+	log.Printf(
+		"[DirectPeer] session=%s AV sync feedback turn=%d excess_video_lag=%.1fms jb_delta=%.1fms audio_delay_target=%dms current=%dms",
+		p.sessionID,
+		turnSeq,
+		excessVideoLagMS,
+		jitterBufferDeltaMS,
+		wanted,
+		current,
+	)
 }
 
 // readRTCP continuously reads RTCP packets from an RTPSender.
@@ -455,6 +519,21 @@ func (p *DirectPeer) WaitAVDrain(timeout time.Duration) {
 	}
 }
 
+func (p *DirectPeer) currentVideoBitrateKbps() int {
+	targetBps := p.targetBitrateBps.Load()
+	if targetBps <= 0 {
+		return defaultDirectVideoBitrateKbps
+	}
+	kbps := int((targetBps * videoBitrateSafetyPercent) / 100 / 1000)
+	if kbps < minDirectVideoBitrateKbps {
+		return minDirectVideoBitrateKbps
+	}
+	if kbps > maxDirectVideoBitrateKbps {
+		return maxDirectVideoBitrateKbps
+	}
+	return kbps
+}
+
 // StopAVPipeline shuts down the AV pipeline goroutines.
 func (p *DirectPeer) StopAVPipeline() {
 	if p.avPipelineCancel != nil {
@@ -489,18 +568,27 @@ func (p *DirectPeer) runEncoder() {
 		}
 
 		encodeStart := time.Now()
+		videoBitrateKbps := p.currentVideoBitrateKbps()
 		directVoiceTrace(
 			"direct_vp8_encode_started",
 			raw.TraceLabel,
-			"queue_ms=%d",
+			"queue_ms=%d bitrate_kbps=%d",
 			raw.UserFinalAt,
 			time.Since(raw.QueuedAt).Milliseconds(),
+			videoBitrateKbps,
 		)
 		if p.avCalibrationEnabled.Load() {
 			p.injectAVCalibrationMarker(raw)
 		}
 
-		vp8Samples, err := mediapeer.EncodeRGBChunkToVP8Samples(raw.RGB, raw.Width, raw.Height, raw.NumFrames, raw.FPS)
+		vp8Samples, err := mediapeer.EncodeRGBChunkToVP8SamplesWithBitrate(
+			raw.RGB,
+			raw.Width,
+			raw.Height,
+			raw.NumFrames,
+			raw.FPS,
+			videoBitrateKbps,
+		)
 		if err != nil {
 			log.Printf("[DirectPeer] encode failed: %v", err)
 			continue
@@ -639,6 +727,75 @@ func maxInt(a, b int) int {
 	return b
 }
 
+func audioDelayPCMBytes(delayMS int64, sampleRate int) int {
+	if delayMS <= 0 || sampleRate <= 0 {
+		return 0
+	}
+	samples := int((delayMS * int64(sampleRate)) / 1000)
+	return samples * 2
+}
+
+func (p *DirectPeer) applyAudioDelay(epoch uint64, pcm []byte, sampleRate int) []byte {
+	if len(pcm) == 0 || sampleRate <= 0 {
+		return pcm
+	}
+
+	p.audioDelayMu.Lock()
+	defer p.audioDelayMu.Unlock()
+
+	if p.audioDelayEpoch != epoch || p.audioDelaySampleRate != sampleRate {
+		p.audioDelayEpoch = epoch
+		p.audioDelaySampleRate = sampleRate
+		p.audioDelayTargetMS = 0
+		p.audioDelayCurrentMS = 0
+		p.audioDelayPCM = nil
+		p.audioDelayLastFeedback = time.Time{}
+	}
+
+	if p.audioDelayTargetMS > 0 &&
+		!p.audioDelayLastFeedback.IsZero() &&
+		time.Since(p.audioDelayLastFeedback) > audioDelayFeedbackMaxAge {
+		p.audioDelayTargetMS -= audioDelayStepMS
+		if p.audioDelayTargetMS < 0 {
+			p.audioDelayTargetMS = 0
+		}
+		p.audioDelayLastFeedback = time.Now()
+	}
+
+	if p.audioDelayTargetMS > p.audioDelayCurrentMS+audioDelayStepMS {
+		p.audioDelayCurrentMS += audioDelayStepMS
+	} else if p.audioDelayTargetMS < p.audioDelayCurrentMS-audioDelayStepMS {
+		p.audioDelayCurrentMS -= audioDelayStepMS
+	} else {
+		p.audioDelayCurrentMS = p.audioDelayTargetMS
+	}
+
+	desiredBytes := audioDelayPCMBytes(p.audioDelayCurrentMS, sampleRate)
+	if desiredBytes <= 0 {
+		p.audioDelayPCM = nil
+		return pcm
+	}
+
+	if len(p.audioDelayPCM) < desiredBytes {
+		p.audioDelayPCM = append(p.audioDelayPCM, make([]byte, desiredBytes-len(p.audioDelayPCM))...)
+	} else if len(p.audioDelayPCM) > desiredBytes {
+		p.audioDelayPCM = p.audioDelayPCM[len(p.audioDelayPCM)-desiredBytes:]
+	}
+
+	combined := make([]byte, 0, len(p.audioDelayPCM)+len(pcm))
+	combined = append(combined, p.audioDelayPCM...)
+	combined = append(combined, pcm...)
+
+	out := make([]byte, len(pcm))
+	copy(out, combined)
+	if len(combined) > len(pcm) {
+		p.audioDelayPCM = append([]byte(nil), combined[len(pcm):]...)
+	} else {
+		p.audioDelayPCM = nil
+	}
+	return out
+}
+
 func (p *DirectPeer) runPublisher() {
 	defer p.avPipelineWg.Done()
 
@@ -697,7 +854,8 @@ func (p *DirectPeer) publishAVSegment(seg *mediapeer.AVSegment) {
 	var opusFrames []media.Sample
 	if len(seg.PCM) > 0 && seg.SampleRate > 0 {
 		var err error
-		opusFrames, err = mediapeer.EncodePCMToOpusSamples(seg.PCM, seg.SampleRate)
+		pcm := p.applyAudioDelay(seg.Epoch, seg.PCM, seg.SampleRate)
+		opusFrames, err = mediapeer.EncodePCMToOpusSamples(pcm, seg.SampleRate)
 		if err != nil {
 			log.Printf("[DirectPeer] audio encode error: %v", err)
 			return
@@ -709,25 +867,34 @@ func (p *DirectPeer) publishAVSegment(seg *mediapeer.AVSegment) {
 	p.sendAVSegmentDiagnostic(seg, publishStart)
 
 	// --- RTP timestamp gap correction ---
-	// Between segments WriteSample pauses; without a Duration bump the browser
-	// jitter buffer treats the next frame as very late. Use the same capped gap
-	// on both tracks so audio RTP cannot run ahead of video (asymmetric
-	// thresholds previously caused progressive desync on long utterances).
+	// Between segments WriteSample pauses; without advancing the RTP clock the
+	// browser jitter buffer treats the next frame as very late. Pion advances
+	// RTP timestamps after WriteSample, so the idle gap must be skipped with an
+	// empty sample before the first real audio/video sample in this segment.
 	now := time.Now()
+	rtpGap := time.Duration(0)
 	if !p.lastVideoWriteTime.IsZero() {
 		wallGap := now.Sub(p.lastVideoWriteTime)
-		if wallGap > rtpGapThreshold(frameDur) {
-			applied := cappedRTPGap(wallGap)
-			if len(seg.VP8Samples) > 0 {
-				seg.VP8Samples[0].Duration = applied
-			}
-			if len(opusFrames) > 0 {
-				opusFrames[0].Duration = applied
-			}
-			if applied != wallGap {
-				log.Printf("[DirectPeer] session=%s RTP timestamp gap correction: wall=%v applied=%v", p.sessionID, wallGap, applied)
+		rtpGap = rtpGapToSkip(wallGap, frameDur)
+		if rtpGap > 0 {
+			if rtpGap != wallGap {
+				log.Printf("[DirectPeer] session=%s RTP timestamp gap correction: wall=%v skipped=%v", p.sessionID, wallGap, rtpGap)
 			} else {
-				log.Printf("[DirectPeer] session=%s RTP timestamp gap correction: %v", p.sessionID, applied)
+				log.Printf("[DirectPeer] session=%s RTP timestamp gap correction skipped=%v", p.sessionID, rtpGap)
+			}
+		}
+	}
+	if rtpGap > 0 {
+		if len(opusFrames) > 0 {
+			if err := p.audioTrack.WriteSample(media.Sample{Duration: rtpGap}); err != nil {
+				log.Printf("[DirectPeer] audio RTP gap skip error: %v", err)
+				return
+			}
+		}
+		if len(seg.VP8Samples) > 0 {
+			if err := p.videoTrack.WriteSample(media.Sample{Duration: rtpGap}); err != nil {
+				log.Printf("[DirectPeer] video RTP gap skip error: %v", err)
+				return
 			}
 		}
 	}

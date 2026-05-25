@@ -627,6 +627,8 @@ func (o *Orchestrator) HandleSignaling(sessionID string, msg ws.WSMessage) {
 	switch msg.Type {
 	case "av_calibration_config":
 		dp.SetAVCalibrationEnabled(msg.Enabled)
+	case "av_sync_feedback":
+		dp.HandleAVSyncFeedback(msg.TurnSeq, msg.ExcessVideoLagMS, msg.JitterBufferDeltaMS, msg.Likely)
 	case "webrtc_ready":
 		// Send TURN ICE server config before the SDP offer
 		if o.turnServer != nil {
