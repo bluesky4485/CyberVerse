@@ -417,6 +417,14 @@ Connect multiple agents so they can communicate, collaborate, and form networks.
 - [ ] Enable shared memory and shared knowledge between agents
 - [ ] Build an open network of connected agents
 
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#dsd2077/CyberVerse&Date">
+    <img src="https://api.star-history.com/svg?repos=dsd2077/CyberVerse&type=Date" alt="Star History Chart" width="100%"/>
+  </a>
+</p>
+
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE).

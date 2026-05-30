@@ -416,6 +416,14 @@ Avatar GPU 리소스가 있을 때 voice Agent를 실시간 영상 통화로 바
 - [ ] 에이전트 간 공유 메모리 및 공유 지식 활성화
 - [ ] 연결된 에이전트의 개방형 네트워크 구축
 
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#dsd2077/CyberVerse&Date">
+    <img src="https://api.star-history.com/svg?repos=dsd2077/CyberVerse&type=Date" alt="Star History Chart" width="100%"/>
+  </a>
+</p>
+
 ## 라이선스
 
 GNU General Public License v3.0. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.

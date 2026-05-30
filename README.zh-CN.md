@@ -414,6 +414,14 @@ ssh -L 8443:127.0.0.1:8443 user@host -p port
 - [ ] 支持智能体之间共享记忆与知识
 - [ ] 构建开放的智能体互联网络
 
+## 星标历史
+
+<p align="center">
+  <a href="https://star-history.com/#dsd2077/CyberVerse&Date">
+    <img src="https://api.star-history.com/svg?repos=dsd2077/CyberVerse&type=Date" alt="Star History Chart" width="100%"/>
+  </a>
+</p>
+
 ## 许可证
 
 GNU General Public License v3.0，详见 [LICENSE](LICENSE)。
