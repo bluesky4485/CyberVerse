@@ -414,6 +414,14 @@ ssh -L 8443:127.0.0.1:8443 user@host -p port
 - [ ] 支持智能体之间共享记忆与知识
 - [ ] 构建开放的智能体互联网络
 
+## 社区交流
+
+<p align="center">
+  <a href="docs/assets/wechat_group.jpg"><img src="docs/assets/wechat_group.jpg" alt="CyberVerse 微信技术交流群二维码" width="320"/></a>
+</p>
+
+<p align="center">如果二维码过期，可添加本人微信：<strong>wx_dsd2077</strong>，并备注 <strong>CyberVerse</strong>，我会邀请您进群</p>
+
 ## 星标历史
 
 <p align="center">

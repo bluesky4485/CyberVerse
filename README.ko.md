@@ -416,6 +416,14 @@ Avatar GPU 리소스가 있을 때 voice Agent를 실시간 영상 통화로 바
 - [ ] 에이전트 간 공유 메모리 및 공유 지식 활성화
 - [ ] 연결된 에이전트의 개방형 네트워크 구축
 
+## 커뮤니티
+
+<p align="center">
+  <a href="docs/assets/wechat_group.jpg"><img src="docs/assets/wechat_group.jpg" alt="CyberVerse WeChat 그룹 QR 코드" width="320"/></a>
+</p>
+
+<p align="center">QR 코드가 만료된 경우 관리자 WeChat <strong>wx_dsd2077</strong>에 추가하고, 친구 신청 시 <strong>CyberVerse</strong>라고 남겨 주세요. 그룹으로 초대해 드립니다.</p>
+
 ## Star History
 
 <p align="center">

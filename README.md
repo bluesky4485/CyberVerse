@@ -417,6 +417,14 @@ Connect multiple agents so they can communicate, collaborate, and form networks.
 - [ ] Enable shared memory and shared knowledge between agents
 - [ ] Build an open network of connected agents
 
+## Community
+
+<p align="center">
+  <a href="docs/assets/wechat_group.jpg"><img src="docs/assets/wechat_group.jpg" alt="CyberVerse WeChat group QR code" width="320"/></a>
+</p>
+
+<p align="center">If the QR code has expired, add the maintainer on WeChat: <strong>wx_dsd2077</strong>. Please note <strong>CyberVerse</strong> in your friend request; we will invite you to the group.</p>
+
 ## Star History
 
 <p align="center">
