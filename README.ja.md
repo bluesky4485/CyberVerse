@@ -330,12 +330,12 @@ python setup.py install
 ```
 
 ```bash
-# FlashAttention（任意）
-pip install ninja
-pip install flash_attn==2.8.0.post2 --no-build-isolation
-```
+# FlashAttention (optional)
+wget -O flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl \
+  "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1%2Bcu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl"
 
-> コンパイルに時間がかかる場合は、[flash-attention releases](https://github.com/Dao-AILab/flash-attention/releases/tag/v2.8.0.post2) からビルド済み wheel をダウンロードし、`pip install <wheel>.whl` を実行してください。
+pip install flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+```
 
 ### Avatar ハードウェアベンチマーク
 

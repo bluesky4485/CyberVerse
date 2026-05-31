@@ -330,11 +330,11 @@ python setup.py install
 
 ```bash
 # FlashAttention（可选）
-pip install ninja
-pip install flash_attn==2.8.0.post2 --no-build-isolation
-```
+wget -O flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl \
+  "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1%2Bcu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl"
 
-> 如果编译很慢，可以从 [flash-attention releases](https://github.com/Dao-AILab/flash-attention/releases/tag/v2.8.0.post2) 下载预编译 wheel，然后执行 `pip install <wheel>.whl`。
+pip install flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+```
 
 ### Avatar 硬件基准
 
