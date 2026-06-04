@@ -324,6 +324,49 @@ inference:
 
 You can also adjust these options later in the web UI.
 
+### LiveAct FP4 GEMM (Optional)
+
+FP4 acceleration requires building and installing `lightx2v_kernel` from [LightX2V](https://github.com/ModelTC/LightX2V). Use PyTorch **2.7+** and a CUTLASS checkout on the build machine.
+
+#### Preparation
+
+```bash
+pip install scikit_build_core uv
+```
+
+#### Build wheel
+
+```bash
+git clone https://github.com/NVIDIA/cutlass.git
+git clone https://github.com/ModelTC/LightX2V.git
+cd LightX2V/lightx2v_kernel
+# Replace /path/to/cutlass with the absolute path to your cutlass clone.
+MAX_JOBS=$(nproc) && CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) \
+uv build --wheel \
+    -Cbuild-dir=build . \
+    -Ccmake.define.CUTLASS_PATH=/path/to/cutlass \
+    --verbose \
+    --color=always \
+    --no-build-isolation
+```
+
+#### Install wheel
+
+```bash
+pip install dist/*.whl --force-reinstall --no-deps
+```
+
+#### Enable in CyberVerse
+
+In `cyberverse_config.yaml` (or the web UI), under `inference.avatar.live_act`:
+
+```yaml
+fp8_gemm: false
+fp4_gemm: true
+```
+
+Restart the inference service after changing these flags.
+
 ### SageAttention & FlashAttention (Optional)
 
 ```bash

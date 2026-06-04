@@ -321,6 +321,49 @@ inference:
 
 这些选项之后也可以在 Web UI 中调整。
 
+### LiveAct FP4 GEMM（可选）
+
+FP4 加速需从 [LightX2V](https://github.com/ModelTC/LightX2V) 编译安装 `lightx2v_kernel`。环境需 **PyTorch 2.7+**，并在本机准备好 CUTLASS 源码。
+
+#### 准备
+
+```bash
+pip install scikit_build_core uv
+```
+
+#### 编译 whl
+
+```bash
+git clone https://github.com/NVIDIA/cutlass.git
+git clone https://github.com/ModelTC/LightX2V.git
+cd LightX2V/lightx2v_kernel
+# 将 /path/to/cutlass 改为你本机 cutlass 仓库的绝对路径。
+MAX_JOBS=$(nproc) && CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) \
+uv build --wheel \
+    -Cbuild-dir=build . \
+    -Ccmake.define.CUTLASS_PATH=/path/to/cutlass \
+    --verbose \
+    --color=always \
+    --no-build-isolation
+```
+
+#### 安装 whl
+
+```bash
+pip install dist/*.whl --force-reinstall --no-deps
+```
+
+#### 在 CyberVerse 中开启
+
+在 `cyberverse_config.yaml`（或 Web UI）的 `inference.avatar.live_act` 下设置：
+
+```yaml
+fp8_gemm: false
+fp4_gemm: true
+```
+
+修改后请重启推理服务。
+
 ### SageAttention 和 FlashAttention（可选）
 
 ```bash

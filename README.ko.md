@@ -323,6 +323,49 @@ inference:
 
 이 옵션들은 나중에 Web UI에서도 조정할 수 있습니다.
 
+### LiveAct FP4 GEMM(선택 사항)
+
+FP4 가속을 사용하려면 [LightX2V](https://github.com/ModelTC/LightX2V)에서 `lightx2v_kernel`을 빌드해 설치해야 합니다. 빌드 머신에는 **PyTorch 2.7+**와 CUTLASS 소스가 필요합니다.
+
+#### 준비
+
+```bash
+pip install scikit_build_core uv
+```
+
+#### whl 빌드
+
+```bash
+git clone https://github.com/NVIDIA/cutlass.git
+git clone https://github.com/ModelTC/LightX2V.git
+cd LightX2V/lightx2v_kernel
+# /path/to/cutlass를 로컬 cutlass 클론의 절대 경로로 바꿉니다.
+MAX_JOBS=$(nproc) && CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) \
+uv build --wheel \
+    -Cbuild-dir=build . \
+    -Ccmake.define.CUTLASS_PATH=/path/to/cutlass \
+    --verbose \
+    --color=always \
+    --no-build-isolation
+```
+
+#### whl 설치
+
+```bash
+pip install dist/*.whl --force-reinstall --no-deps
+```
+
+#### CyberVerse에서 활성화
+
+`cyberverse_config.yaml`(또는 Web UI)의 `inference.avatar.live_act`에서 다음을 설정합니다:
+
+```yaml
+fp8_gemm: false
+fp4_gemm: true
+```
+
+플래그를 변경한 뒤 추론 서비스를 재시작하세요.
+
 ### SageAttention 및 FlashAttention(선택 사항)
 
 ```bash
