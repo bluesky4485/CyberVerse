@@ -152,6 +152,7 @@ DOUBAO_APP_ID=your_doubao_app_id
 
 ```bash
 cp infra/cyberverse_config.example.yaml cyberverse_config.yaml
+cp -r infra/avatar_models avatar_models
 ```
 
 编辑 `cyberverse_config.yaml`：
@@ -275,51 +276,25 @@ hf download TencentGameMate/chinese-wav2vec2-base \
 
 ### 配置 Avatar Inference
 
-将 `enabled` 设为 `true`，并把模型路径改成你的本地 checkpoint 路径：
+在 `cyberverse_config.yaml` 中将 `enabled` 设为 `true`。具体模型参数放在
+`avatar_models/` 下，每个模型一个 YAML 文件；把对应文件里的路径改成你的本地
+checkpoint 路径。
 
 ```yaml
 inference:
   avatar:
     enabled: true
-    default: "flash_head"               # 指定启动的数字人模型；若设为 live_act，请填写下方 live_act 配置
+    default: "flash_head"               # 可选 "flash_head" 或 "live_act"
+    idle_strategy: "silent_inference"
     runtime:
       cuda_visible_devices: 0      # 共享 GPU ID，例如多卡可写 0,1
       world_size: 1                # 共享 GPU 数量，双卡时设为 2
-    flash_head:
-      checkpoint_dir: "./checkpoints/SoulX-FlashHead-1_3B"  # ← 你的路径
-      wav2vec_dir: "./checkpoints/wav2vec2-base-960h"        # ← 你的路径
-      model_type: "lite"           # 如需更高画质可设为 "pro"（需要更多 GPU）
-      compile_model: true
-      compile_vae: true
-      dist_worker_main_thread: true
-      infer_params:
-        frame_num: 33
-        motion_frames_latent_num: 2
-        tgt_fps: 20
-        sample_rate: 16000
-        sample_shift: 5
-        color_correction_strength: 1.0
-        cached_audio_duration: 8
-        num_heads: 12
-        height: 512
-        width: 512
-    live_act:
-      ckpt_dir: "./checkpoints/LiveAct"                     # ← 你的路径
-      wav2vec_dir: "./checkpoints/chinese-wav2vec2-base"   # ← 你的路径
-      seed: 42
-      fp8_gemm: true
-      fp4_gemm: false
-      compile_wan_model: false
-      compile_vae_decode: false
-      dist_worker_main_thread: true
-      default_prompt: "一个人在说话"
-      infer_params:
-        size: "320*480"
-        fps: 20
-        audio_cfg: 1.0
+    model_config_dir: "avatar_models"
 ```
 
-这些选项之后也可以在 Web UI 中调整。
+然后编辑当前模型文件，例如 `avatar_models/flash_head.yaml` 或
+`avatar_models/live_act.yaml`。这些模型参数之后也可以在 Web UI 中调整，并会写回
+对应的模型配置文件。
 
 ### LiveAct FP4 GEMM（可选）
 
@@ -355,7 +330,7 @@ pip install dist/*.whl --force-reinstall --no-deps
 
 #### 在 CyberVerse 中开启
 
-在 `cyberverse_config.yaml`（或 Web UI）的 `inference.avatar.live_act` 下设置：
+在 `avatar_models/live_act.yaml`（或 Web UI）的 `live_act` 下设置：
 
 ```yaml
 fp8_gemm: false

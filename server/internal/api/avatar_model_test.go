@@ -249,6 +249,82 @@ inference:
 	return NewRouter(orchestrator.NewSessionManager(4), orch, nil, nil, cfg, charStore, "", configPath), charStore
 }
 
+func newExternalAvatarModelTestRouter(t *testing.T, activeModel string) (*Router, string) {
+	t.Helper()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, "cyberverse_config.yaml")
+	modelDir := filepath.Join(root, "avatar_models")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configYAML := `server:
+  host: "0.0.0.0"
+  http_port: 8080
+  grpc_port: 50051
+inference:
+  avatar:
+    default: "flash_head"
+    idle_strategy: "cached_video"
+    runtime:
+      cuda_visible_devices: "0,1"
+      world_size: 2
+    model_config_dir: avatar_models
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modelDir, "flash_head.yaml"), []byte(`
+flash_head:
+  plugin_class: "inference.plugins.avatar.flash_head_plugin.FlashHeadAvatarPlugin"
+  checkpoint_dir: "/tmp/flash"
+  wav2vec_dir: "/tmp/wav2vec"
+  model_type: "pro"
+  compile_model: true
+  compile_vae: true
+  dist_worker_main_thread: true
+  infer_params:
+    tgt_fps: 25
+    frame_num: 33
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modelDir, "live_act.yaml"), []byte(`
+live_act:
+  plugin_class: "inference.plugins.avatar.live_act_plugin.LiveActAvatarPlugin"
+  ckpt_dir: "/tmp/live_act"
+  wav2vec_dir: "/tmp/live_wav2vec"
+  seed: 42
+  t5_cpu: false
+  fp8_gemm: true
+  fp4_gemm: false
+  compile_wan_model: true
+  compile_vae_decode: true
+  dist_worker_main_thread: true
+  default_prompt: "一个人在说话"
+  infer_params:
+    size: "320*480"
+    fps: 24
+    audio_cfg: 1.0
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charStore, err := character.NewStore(filepath.Join(root, "characters"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inf := &fakeInferenceService{
+		avatarInfo: &pb.AvatarInfo{ModelName: "avatar." + activeModel, OutputFps: 24, OutputWidth: 320, OutputHeight: 480},
+	}
+	orch := orchestrator.New(inf, nil, orchestrator.NewSessionManager(4), nil, charStore)
+	return NewRouter(orchestrator.NewSessionManager(4), orch, nil, nil, cfg, charStore, "", configPath), modelDir
+}
+
 func TestGetAvatarModelInfoUsesRuntimeModel(t *testing.T) {
 	r, _ := newAvatarModelTestRouter(t, "live_act")
 
@@ -277,6 +353,33 @@ func TestGetAvatarModelInfoUsesRuntimeModel(t *testing.T) {
 	}
 	if !resp.ConfigStatus.HasInferParams {
 		t.Fatalf("expected live_act infer params to be present")
+	}
+}
+
+func TestGetAvatarModelInfoIncludesExternalAvatarModels(t *testing.T) {
+	r, _ := newExternalAvatarModelTestRouter(t, "live_act")
+
+	req := httptest.NewRequest("GET", "/api/v1/config/avatar-model", nil)
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp avatarModelInfoResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	models := map[string]bool{}
+	for _, model := range resp.Models {
+		models[model.Name] = true
+	}
+	if !models["flash_head"] || !models["live_act"] {
+		t.Fatalf("expected external avatar models, got %#v", models)
+	}
+	if models["model_config_dir"] || models["idle_strategy"] {
+		t.Fatalf("did not expect avatar control keys as models: %#v", models)
 	}
 }
 
@@ -445,6 +548,38 @@ func TestGetLaunchConfigReadsVideoSectionFromMainConfig(t *testing.T) {
 	}
 }
 
+func TestGetLaunchConfigReadsExternalModelConfig(t *testing.T) {
+	r, _ := newExternalAvatarModelTestRouter(t, "live_act")
+
+	req := httptest.NewRequest("GET", "/api/v1/config/launch", nil)
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp launchConfigResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]any{}
+	for _, section := range resp.Sections {
+		for _, param := range section.Params {
+			paths[param.Path] = param.Value
+		}
+	}
+	if got := fmt.Sprint(paths["inference.avatar.live_act.default_prompt"]); got != "一个人在说话" {
+		t.Fatalf("expected external live_act default_prompt, got %#v", got)
+	}
+	if got := fmt.Sprint(paths["inference.avatar.live_act.infer_params.fps"]); got != "24" {
+		t.Fatalf("expected external live_act fps, got %#v", got)
+	}
+	if got := fmt.Sprint(paths["inference.avatar.runtime.world_size"]); got != "2" {
+		t.Fatalf("expected shared runtime world_size, got %#v", got)
+	}
+}
+
 func TestUpdateLaunchConfigRejectsNonActiveModel(t *testing.T) {
 	r, _ := newAvatarModelTestRouter(t, "live_act")
 
@@ -586,6 +721,65 @@ func TestUpdateLaunchConfigWritesLiveActRootParamsToMainConfig(t *testing.T) {
 	}
 	if got := fmt.Sprint(config.NodeValue(node, true)); got != "true" {
 		t.Fatalf("expected t5_cpu to be updated to true, got %#v", got)
+	}
+}
+
+func TestUpdateLaunchConfigWritesExternalInferParamsToModelFile(t *testing.T) {
+	r, modelDir := newExternalAvatarModelTestRouter(t, "live_act")
+
+	body := `{"model":"live_act","params":[{"path":"inference.avatar.live_act.infer_params.fps","value":20}]}`
+	req := httptest.NewRequest("PUT", "/api/v1/config/launch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	doc, err := config.ReadYAMLNode(filepath.Join(modelDir, "live_act.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := config.GetNodeAtPath(doc, "live_act.infer_params.fps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(config.NodeValue(node, true)); got != "20" {
+		t.Fatalf("expected external fps to be updated to 20, got %#v", got)
+	}
+	mainDoc, err := config.ReadYAMLNode(r.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.GetNodeAtPath(mainDoc, "inference.avatar.live_act"); err == nil {
+		t.Fatal("did not expect live_act to be written into main config")
+	}
+}
+
+func TestUpdateLaunchConfigWritesRuntimeToMainConfigWithExternalModels(t *testing.T) {
+	r, _ := newExternalAvatarModelTestRouter(t, "live_act")
+
+	body := `{"model":"live_act","params":[{"path":"inference.avatar.runtime.world_size","value":1}]}`
+	req := httptest.NewRequest("PUT", "/api/v1/config/launch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	doc, err := config.ReadYAMLNode(r.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := config.GetNodeAtPath(doc, "inference.avatar.runtime.world_size")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(config.NodeValue(node, true)); got != "1" {
+		t.Fatalf("expected runtime world_size in main config to be 1, got %#v", got)
 	}
 }
 

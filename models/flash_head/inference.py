@@ -3,18 +3,16 @@ from __future__ import annotations
 
 import copy
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 import torch
-import yaml
 from loguru import logger
 
+from inference.core.config import load_config
 from flash_head.src.distributed.usp_device import get_device, get_parallel_degree
 from flash_head.src.pipeline.flash_head_pipeline import FlashHeadPipeline
 
-_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "cyberverse_config.yaml"
 _FLASH_HEAD_INFER_PARAMS_PATH = "inference.avatar.flash_head.infer_params"
 _DEFAULT_RUNTIME_OPTIONS = {
@@ -47,23 +45,9 @@ def resolve_config_path(config_path: str | os.PathLike[str] | None = None) -> Pa
     return path
 
 
-def _expand_env(raw: str) -> str:
-    def _replace_env(match: re.Match) -> str:
-        var_name = match.group(1)
-        return os.environ.get(var_name, match.group(0))
-
-    return _ENV_VAR_PATTERN.sub(_replace_env, raw)
-
-
 def _load_yaml_config(config_path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     path = resolve_config_path(config_path)
-    if not path.exists():
-        raise FileNotFoundError(f"FlashHead config file not found: {path}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        raw = _expand_env(f.read())
-
-    data = yaml.safe_load(raw)
+    data = load_config(path)
     if not isinstance(data, dict):
         raise ValueError(f"FlashHead config root must be a mapping: {path}")
     return data

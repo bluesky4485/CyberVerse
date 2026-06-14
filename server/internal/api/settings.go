@@ -334,7 +334,7 @@ func (r *Router) configuredAvatarModels() []string {
 	if r.configPath == "" {
 		return nil
 	}
-	doc, err := config.ReadYAMLNode(r.configPath)
+	doc, err := config.ReadResolvedYAMLNode(r.configPath)
 	if err != nil {
 		return nil
 	}
@@ -344,7 +344,7 @@ func (r *Router) configuredAvatarModels() []string {
 	}
 	models := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if key == "default" || key == "enabled" || key == "runtime" {
+		if key == "default" || key == "enabled" || key == "idle_strategy" || key == "runtime" || key == "model_config_dir" {
 			continue
 		}
 		models = append(models, key)
@@ -361,7 +361,7 @@ func (r *Router) inferParamsExists(modelName string) bool {
 	if modelName == "" || r.configPath == "" {
 		return false
 	}
-	doc, err := config.ReadYAMLNode(r.configPath)
+	doc, err := config.ReadResolvedYAMLNode(r.configPath)
 	if err != nil {
 		return false
 	}
@@ -448,7 +448,7 @@ func (r *Router) buildLaunchSections(modelName string) []launchConfigSectionJSON
 	gpuSection := launchConfigSectionJSON{Key: "gpu", Title: "GPU 配置", Badge: "restart"}
 
 	if r.configPath != "" {
-		doc, err := config.ReadYAMLNode(r.configPath)
+		doc, err := config.ReadResolvedYAMLNode(r.configPath)
 		if err == nil {
 			modelPath := "inference.avatar." + modelName
 			modelGPUParams := map[string]launchConfigParamJSON{}
@@ -555,7 +555,7 @@ func (r *Router) buildLaunchSections(modelName string) []launchConfigSectionJSON
 	if r.inferParamsExists(modelName) {
 		videoSection := launchConfigSectionJSON{Key: "video_output", Title: "视频输出", Badge: "restart"}
 		inferPath := inferParamsConfigPath(modelName)
-		if doc, err := config.ReadYAMLNode(r.configPath); err == nil {
+		if doc, err := config.ReadResolvedYAMLNode(r.configPath); err == nil {
 			keys, err := config.GetMappingKeys(doc, inferPath)
 			if err == nil {
 				for _, key := range keys {
@@ -635,12 +635,34 @@ func (r *Router) handleUpdateLaunchConfig(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Group updates by config path.
-	mainUpdates := map[string]string{} // dot-path -> value
+	updatesByFile := map[string]map[string]string{} // config path -> dot-path -> value
 
 	modelPrefix := "inference.avatar." + body.Model + "."
 	runtimePrefix := "inference.avatar.runtime."
 	inferParamsPrefix := inferParamsConfigPath(body.Model) + "."
+
+	addUpdate := func(path, dotPath string, value any) {
+		if _, ok := updatesByFile[path]; !ok {
+			updatesByFile[path] = map[string]string{}
+		}
+		updatesByFile[path][dotPath] = fmt.Sprintf("%v", value)
+	}
+
+	addModelUpdate := func(fullPath string, value any) error {
+		sourcePath, external, err := config.AvatarModelConfigSource(r.configPath, body.Model)
+		if err != nil {
+			return err
+		}
+		dotPath := fullPath
+		if external {
+			dotPath, err = config.AvatarModelExternalDotPath(body.Model, fullPath)
+			if err != nil {
+				return err
+			}
+		}
+		addUpdate(sourcePath, dotPath, value)
+		return nil
+	}
 
 	for _, p := range body.Params {
 		// Determine source and validate.
@@ -652,7 +674,12 @@ func (r *Router) handleUpdateLaunchConfig(w http.ResponseWriter, req *http.Reque
 				})
 				return
 			}
-			mainUpdates[p.Path] = fmt.Sprintf("%v", p.Value)
+			if err := addModelUpdate(p.Path, p.Value); err != nil {
+				writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+					Error: fmt.Sprintf("set %s: %v", p.Path, err),
+				})
+				return
+			}
 		} else if strings.HasPrefix(p.Path, runtimePrefix) {
 			key := strings.TrimPrefix(p.Path, runtimePrefix)
 			if !runtimeGPUKeys[key] {
@@ -661,7 +688,7 @@ func (r *Router) handleUpdateLaunchConfig(w http.ResponseWriter, req *http.Reque
 				})
 				return
 			}
-			mainUpdates[p.Path] = fmt.Sprintf("%v", p.Value)
+			addUpdate(r.configPath, p.Path, p.Value)
 		} else if strings.HasPrefix(p.Path, modelPrefix) {
 			key := strings.TrimPrefix(p.Path, modelPrefix)
 			meta, hasMeta := paramMeta[key]
@@ -671,7 +698,12 @@ func (r *Router) handleUpdateLaunchConfig(w http.ResponseWriter, req *http.Reque
 				})
 				return
 			}
-			mainUpdates[p.Path] = fmt.Sprintf("%v", p.Value)
+			if err := addModelUpdate(p.Path, p.Value); err != nil {
+				writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+					Error: fmt.Sprintf("set %s: %v", p.Path, err),
+				})
+				return
+			}
 		} else {
 			writeJSON(w, http.StatusBadRequest, ErrorResponse{
 				Error: fmt.Sprintf("parameter %q is not in scope for model %q", p.Path, body.Model),
@@ -680,23 +712,25 @@ func (r *Router) handleUpdateLaunchConfig(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	if len(mainUpdates) > 0 && r.configPath != "" {
-		doc, err := config.ReadYAMLNode(r.configPath)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-			return
-		}
-		for path, val := range mainUpdates {
-			if err := config.SetNodeAtPath(doc, path, val); err != nil {
-				writeJSON(w, http.StatusInternalServerError, ErrorResponse{
-					Error: fmt.Sprintf("set %s: %v", path, err),
-				})
+	if len(updatesByFile) > 0 && r.configPath != "" {
+		for path, updates := range updatesByFile {
+			doc, err := config.ReadYAMLNode(path)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 				return
 			}
-		}
-		if err := config.WriteYAMLNode(r.configPath, doc); err != nil {
-			writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-			return
+			for dotPath, val := range updates {
+				if err := config.SetNodeAtPath(doc, dotPath, val); err != nil {
+					writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+						Error: fmt.Sprintf("set %s: %v", dotPath, err),
+					})
+					return
+				}
+			}
+			if err := config.WriteYAMLNode(path, doc); err != nil {
+				writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+				return
+			}
 		}
 	}
 

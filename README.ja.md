@@ -153,6 +153,7 @@ Doubao Voice: [Volcengine クイックスタート](https://www.volcengine.com/d
 
 ```bash
 cp infra/cyberverse_config.example.yaml cyberverse_config.yaml
+cp -r infra/avatar_models avatar_models
 ```
 
 `cyberverse_config.yaml` を編集します。
@@ -276,51 +277,24 @@ hf download TencentGameMate/chinese-wav2vec2-base \
 
 ### Avatar Inference を設定する
 
-`enabled` を `true` にし、モデルパスをローカルの checkpoint パスに合わせて更新します。
+`cyberverse_config.yaml` で `enabled` を `true` にします。モデル固有の設定は
+`avatar_models/` 配下にモデルごとの YAML として置き、そこにローカル checkpoint
+のパスを書きます。
 
 ```yaml
 inference:
   avatar:
     enabled: true
-    default: "flash_head"               # 起動するアバターモデルを指定。live_act を選ぶ場合は下の live_act 設定を記入
+    default: "flash_head"
+    idle_strategy: "silent_inference"
     runtime:
       cuda_visible_devices: 0      # 共有 GPU ID。マルチ GPU の場合は 0,1 など
       world_size: 1                # 共有 GPU 数。デュアル GPU なら 2
-    flash_head:
-      checkpoint_dir: "./checkpoints/SoulX-FlashHead-1_3B"  # ← ローカルのパス
-      wav2vec_dir: "./checkpoints/wav2vec2-base-960h"        # ← ローカルのパス
-      model_type: "lite"           # 高画質が必要なら "pro"（より多くの GPU が必要）
-      compile_model: true
-      compile_vae: true
-      dist_worker_main_thread: true
-      infer_params:
-        frame_num: 33
-        motion_frames_latent_num: 2
-        tgt_fps: 20
-        sample_rate: 16000
-        sample_shift: 5
-        color_correction_strength: 1.0
-        cached_audio_duration: 8
-        num_heads: 12
-        height: 512
-        width: 512
-    live_act:
-      ckpt_dir: "./checkpoints/LiveAct"                     # ← ローカルのパス
-      wav2vec_dir: "./checkpoints/chinese-wav2vec2-base"   # ← ローカルのパス
-      seed: 42
-      fp8_gemm: true
-      fp4_gemm: false
-      compile_wan_model: false
-      compile_vae_decode: false
-      dist_worker_main_thread: true
-      default_prompt: "一个人在说话"
-      infer_params:
-        size: "320*480"
-        fps: 20
-        audio_cfg: 1.0
+    model_config_dir: "avatar_models"
 ```
 
-これらのオプションは、あとで Web UI から調整することもできます。
+次に `avatar_models/flash_head.yaml` や `avatar_models/live_act.yaml` を編集します。
+これらのモデルパラメータは Web UI からも調整でき、対応するモデル設定ファイルへ書き戻されます。
 
 ### LiveAct FP4 GEMM（任意）
 
@@ -356,7 +330,7 @@ pip install dist/*.whl --force-reinstall --no-deps
 
 #### CyberVerse で有効化
 
-`cyberverse_config.yaml`（または Web UI）の `inference.avatar.live_act` で次を設定します：
+`avatar_models/live_act.yaml`（または Web UI）の `live_act` で次を設定します：
 
 ```yaml
 fp8_gemm: false

@@ -112,7 +112,7 @@ hf download Soul-AILab/SoulX-FlashHead-1_3B --local-dir ./models/SoulX-FlashHead
 hf download facebook/wav2vec2-base-960h --local-dir ./models/wav2vec2-base-960h
 ```
 
-> Runtime video parameters are read from the repo-root `cyberverse_config.yaml` under `inference.avatar.flash_head.infer_params`. FlashHead runtime toggles such as `compile_model`, `compile_vae`, and `dist_worker_main_thread` live under `inference.avatar.flash_head`. Use `--config /path/to/cyberverse_config.yaml` with `generate_video.py`, `gradio_app.py`, or `gradio_app_streaming.py` to override the default config path.
+> Runtime video parameters are read through `cyberverse_config.yaml`. In the default layout, `inference.avatar.model_config_dir` points to `avatar_models/`, and FlashHead settings live in `avatar_models/flash_head.yaml` under `flash_head.infer_params`. Inline `inference.avatar.flash_head` still works as an override. Use `--config /path/to/cyberverse_config.yaml` with `generate_video.py`, `gradio_app.py`, or `gradio_app_streaming.py` to override the default config path.
 
 ### 🚀 Inference
 ```bash

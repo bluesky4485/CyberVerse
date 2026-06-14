@@ -12,6 +12,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /build/cyberverse-server .
 COPY cyberverse_config.yaml .
+COPY avatar_models/ ./avatar_models/
 
 EXPOSE 8080
 CMD ["./cyberverse-server", "--config", "cyberverse_config.yaml"]

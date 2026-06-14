@@ -1,6 +1,7 @@
 # CyberVerse example configuration.
-# Copy this file to cyberverse_config.yaml and edit the local copy:
+# Copy this file and the avatar model configs to local editable copies:
 #   cp infra/cyberverse_config.example.yaml cyberverse_config.yaml
+#   cp -r infra/avatar_models avatar_models
 #
 # Keep secrets in .env. Values such as ${DASHSCOPE_API_KEY} are expanded from
 # environment variables after .env is loaded.
@@ -37,54 +38,9 @@ inference:
             # Used by scripts/inference.sh; world_size must match the visible GPU count.
             cuda_visible_devices: 0 # Use 0,1 for two GPUs.
             world_size: 1
-        flash_head:
-            plugin_class: "inference.plugins.avatar.flash_head_plugin.FlashHeadAvatarPlugin"
-            models_dir: "models"
-            checkpoint_dir: "./checkpoints/SoulX-FlashHead-1_3B"
-            wav2vec_dir: "./checkpoints/wav2vec2-base-960h"
-            model_type: "pro" # "pro" is higher quality; "lite" is faster/lower cost.
-            device: "cuda:0"
-            seed: 9999
-            # torch.compile can improve steady-state speed but may increase startup cost.
-            compile_model: true
-            compile_vae: true
-            # Keeps multi-GPU collectives off background Python threads.
-            dist_worker_main_thread: true
-            infer_params:
-                # These values define FlashHead's streaming window and output cadence.
-                frame_num: 33
-                motion_frames_latent_num: 2
-                tgt_fps: 20
-                sample_rate: 16000
-                sample_shift: 5
-                color_correction_strength: 1.0
-                cached_audio_duration: 8
-                num_heads: 12
-                height: 512
-                width: 512
-        live_act:
-            plugin_class: "inference.plugins.avatar.live_act_plugin.LiveActAvatarPlugin"
-            models_dir: "models/SoulX-LiveAct"
-            ckpt_dir: "./checkpoints/LiveAct"
-            wav2vec_dir: "./checkpoints/chinese-wav2vec2-base"
-            seed: 42
-            # Memory/performance switches. Enable offload/cache compression only when GPU memory is tight.
-            t5_cpu: false # When true, place the T5 text encoder on CPU to save GPU memory.
-            fp8_gemm: true # Use FP8 GEMM acceleration when supported (default).
-            fp4_gemm: false # Use FP4 GEMM on supported B-series GPUs; requires lightx2v_kernel (see README).
-            fp8_kv_cache: false
-            offload_cache: false
-            block_offload: false
-            mean_memory: false
-            # torch.compile for Wan/VAE decode; slower startup, may be unstable in some dev environments.
-            compile_wan_model: true # When true, torch.compile the Wan model; slower startup, may be unstable.
-            compile_vae_decode: true
-            dist_worker_main_thread: true
-            default_prompt: "一个人在说话"
-            infer_params:
-                size: "272*480" # width*height; real-time resolution achievable on PRO 6000
-                fps: 20
-                audio_cfg: 1.0 # Audio classifier-free guidance scale.
+        # Each file under this directory contains one top-level avatar model
+        # such as flash_head or live_act.
+        model_config_dir: "avatar_models"
 
     omni:
         # Real realtime omni model providers only.

@@ -154,6 +154,7 @@ After the stack is running, you can change API keys and service endpoints from t
 
 ```bash
 cp infra/cyberverse_config.example.yaml cyberverse_config.yaml
+cp -r infra/avatar_models avatar_models
 ```
 
 Edit `cyberverse_config.yaml`:
@@ -278,51 +279,25 @@ hf download TencentGameMate/chinese-wav2vec2-base \
 
 ### Configure Avatar Inference
 
-Set `enabled: true`, then update the model paths to match your local checkpoints:
+Set `enabled: true` in `cyberverse_config.yaml`. Model-specific settings live in
+one file per model under `avatar_models/`; update those paths to match your
+local checkpoints.
 
 ```yaml
 inference:
   avatar:
     enabled: true
-    default: "flash_head"               # selects which avatar model to start; if set to live_act, fill the live_act section below
+    default: "flash_head"               # use "flash_head" or "live_act"
+    idle_strategy: "silent_inference"
     runtime:
       cuda_visible_devices: 0      # shared GPU ID(s), e.g. 0,1 for multi-GPU
       world_size: 1                # shared GPU count, set to 2 for dual-GPU
-    flash_head:
-      checkpoint_dir: "./checkpoints/SoulX-FlashHead-1_3B"  # ← your path
-      wav2vec_dir: "./checkpoints/wav2vec2-base-960h"        # ← your path
-      model_type: "lite"           # "pro" for higher quality (needs more GPU)
-      compile_model: true
-      compile_vae: true
-      dist_worker_main_thread: true
-      infer_params:
-        frame_num: 33
-        motion_frames_latent_num: 2
-        tgt_fps: 20
-        sample_rate: 16000
-        sample_shift: 5
-        color_correction_strength: 1.0
-        cached_audio_duration: 8
-        num_heads: 12
-        height: 512
-        width: 512
-    live_act:
-      ckpt_dir: "./checkpoints/LiveAct"                     # ← your path
-      wav2vec_dir: "./checkpoints/chinese-wav2vec2-base"   # ← your path
-      seed: 42
-      fp8_gemm: true
-      fp4_gemm: false
-      compile_wan_model: false
-      compile_vae_decode: false
-      dist_worker_main_thread: true
-      default_prompt: "一个人在说话"
-      infer_params:
-        size: "320*480"
-        fps: 20
-        audio_cfg: 1.0
+    model_config_dir: "avatar_models"
 ```
 
-You can also adjust these options later in the web UI.
+Then edit the active model file, for example `avatar_models/flash_head.yaml` or
+`avatar_models/live_act.yaml`. The Web UI also edits model parameters in those
+per-model files.
 
 ### LiveAct FP4 GEMM (Optional)
 
@@ -358,7 +333,7 @@ pip install dist/*.whl --force-reinstall --no-deps
 
 #### Enable in CyberVerse
 
-In `cyberverse_config.yaml` (or the web UI), under `inference.avatar.live_act`:
+In `avatar_models/live_act.yaml` (or the web UI), under `live_act`:
 
 ```yaml
 fp8_gemm: false

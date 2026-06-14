@@ -8,7 +8,7 @@ CONFIG="${1:-cyberverse_config.yaml}"
 
 if [[ ! -f "${CONFIG}" ]]; then
   echo "Config file not found: ${CONFIG}" >&2
-  echo "Copy infra/cyberverse_config.example.yaml to cyberverse_config.yaml first." >&2
+  echo "Copy infra/cyberverse_config.example.yaml to cyberverse_config.yaml and infra/avatar_models to avatar_models first." >&2
   exit 1
 fi
 
@@ -22,14 +22,13 @@ fi
 _yaml_first_val() {
   python3 - "$CONFIG" "$@" <<'PY'
 import sys
-import yaml
+from inference.core.config import load_config
 
 config_path = sys.argv[1]
 paths = sys.argv[2:-1]
 default = sys.argv[-1]
 
-with open(config_path, "r", encoding="utf-8") as f:
-    cfg = yaml.safe_load(f) or {}
+cfg = load_config(config_path) or {}
 
 
 def lookup(root, dotted):

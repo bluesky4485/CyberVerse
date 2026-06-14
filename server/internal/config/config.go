@@ -36,9 +36,10 @@ type PluginDefaults struct {
 }
 
 type AvatarPluginSection struct {
-	Enabled      *bool  `yaml:"enabled"`
-	Default      string `yaml:"default"`
-	IdleStrategy string `yaml:"idle_strategy"`
+	Enabled        *bool  `yaml:"enabled"`
+	Default        string `yaml:"default"`
+	IdleStrategy   string `yaml:"idle_strategy"`
+	ModelConfigDir string `yaml:"model_config_dir"`
 }
 
 type PluginDefaultSection struct {

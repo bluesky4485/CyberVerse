@@ -119,7 +119,7 @@ func (r *Router) configuredIdleVideoTarget() idleVideoTarget {
 	if model == "" {
 		return idleVideoTarget{}
 	}
-	doc, err := config.ReadYAMLNode(r.configPath)
+	doc, err := config.ReadResolvedYAMLNode(r.configPath)
 	if err != nil {
 		return idleVideoTarget{}
 	}

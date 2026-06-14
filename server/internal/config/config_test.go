@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -76,5 +77,152 @@ inference:
 `))
 	if err == nil {
 		t.Fatal("expected invalid idle_strategy to fail")
+	}
+}
+
+func writeResolvedConfigFixture(t *testing.T, mainBody string, models map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	modelDir := filepath.Join(root, "avatar_models")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range models {
+		if err := os.WriteFile(filepath.Join(modelDir, name+".yaml"), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(root, "cyberverse_config.yaml")
+	if err := os.WriteFile(path, []byte(mainBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestReadResolvedYAMLNodeMergesAvatarModelConfigDir(t *testing.T) {
+	path := writeResolvedConfigFixture(t, `
+inference:
+  avatar:
+    default: flash_head
+    model_config_dir: avatar_models
+`, map[string]string{
+		"flash_head": `
+flash_head:
+  plugin_class: pkg.FlashHead
+  infer_params:
+    width: 512
+`,
+	})
+
+	doc, err := ReadResolvedYAMLNode(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := GetNodeAtPath(doc, "inference.avatar.flash_head.infer_params.width")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(NodeValue(node, true)); got != "512" {
+		t.Fatalf("expected merged width 512, got %q", got)
+	}
+}
+
+func TestReadResolvedYAMLNodeKeepsInlineAvatarModelConfig(t *testing.T) {
+	path := writeResolvedConfigFixture(t, `
+inference:
+  avatar:
+    model_config_dir: avatar_models
+    flash_head:
+      plugin_class: pkg.Inline
+      compile_model: true
+`, map[string]string{
+		"flash_head": `
+flash_head:
+  plugin_class: pkg.External
+  compile_model: false
+`,
+	})
+
+	doc, err := ReadResolvedYAMLNode(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := GetNodeAtPath(doc, "inference.avatar.flash_head.plugin_class")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := NodeScalarValue(node, true); got != "pkg.Inline" {
+		t.Fatalf("expected inline plugin class, got %q", got)
+	}
+}
+
+func TestReadResolvedYAMLNodeRejectsDuplicateExternalAvatarModels(t *testing.T) {
+	path := writeResolvedConfigFixture(t, `
+inference:
+  avatar:
+    model_config_dir: avatar_models
+`, map[string]string{
+		"one": `
+flash_head:
+  plugin_class: pkg.One
+`,
+		"two": `
+flash_head:
+  plugin_class: pkg.Two
+`,
+	})
+
+	if _, err := ReadResolvedYAMLNode(path); err == nil {
+		t.Fatal("expected duplicate external avatar model to fail")
+	}
+}
+
+func TestAvatarModelConfigSourceReturnsExternalModelFile(t *testing.T) {
+	path := writeResolvedConfigFixture(t, `
+inference:
+  avatar:
+    model_config_dir: avatar_models
+`, map[string]string{
+		"live_act": `
+live_act:
+  plugin_class: pkg.LiveAct
+`,
+	})
+
+	source, external, err := AvatarModelConfigSource(path, "live_act")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !external {
+		t.Fatal("expected external source")
+	}
+	if filepath.Base(source) != "live_act.yaml" {
+		t.Fatalf("expected live_act.yaml, got %s", source)
+	}
+}
+
+func TestAvatarModelConfigSourcePrefersInlineModelConfig(t *testing.T) {
+	path := writeResolvedConfigFixture(t, `
+inference:
+  avatar:
+    model_config_dir: avatar_models
+    flash_head:
+      plugin_class: pkg.Inline
+`, map[string]string{
+		"flash_head": `
+flash_head:
+  plugin_class: pkg.External
+`,
+	})
+
+	source, external, err := AvatarModelConfigSource(path, "flash_head")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if external {
+		t.Fatal("expected inline source")
+	}
+	if source != path {
+		t.Fatalf("expected main config path, got %s", source)
 	}
 }

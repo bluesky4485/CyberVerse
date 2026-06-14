@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,19 @@ func ReadYAMLNode(path string) (*yaml.Node, error) {
 		return &doc, nil
 	}
 	return &doc, nil
+}
+
+// ReadResolvedYAMLNode reads the main config and merges external avatar model
+// configs from inference.avatar.model_config_dir for read-only consumers.
+func ReadResolvedYAMLNode(path string) (*yaml.Node, error) {
+	doc, err := ReadYAMLNode(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := MergeAvatarModelConfigDir(doc, path); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }
 
 // mappingRoot returns the top-level mapping node from a document node.
@@ -79,6 +93,187 @@ func GetMappingKeys(doc *yaml.Node, dotPath string) ([]string, error) {
 		keys = append(keys, node.Content[i].Value)
 	}
 	return keys, nil
+}
+
+func mappingHasKey(node *yaml.Node, key string) bool {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
+}
+
+func cloneYAMLNode(node *yaml.Node) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	clone := *node
+	if len(node.Content) > 0 {
+		clone.Content = make([]*yaml.Node, len(node.Content))
+		for i, child := range node.Content {
+			clone.Content[i] = cloneYAMLNode(child)
+		}
+	}
+	return &clone
+}
+
+func avatarModelConfigDir(doc *yaml.Node, configPath string) (string, bool, error) {
+	node, err := GetNodeAtPath(doc, "inference.avatar.model_config_dir")
+	if err != nil {
+		return "", false, nil
+	}
+	if node.Kind != yaml.ScalarNode {
+		return "", false, fmt.Errorf("inference.avatar.model_config_dir must be a scalar")
+	}
+	dir := strings.TrimSpace(NodeScalarValue(node, true))
+	if dir == "" {
+		return "", false, nil
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(filepath.Dir(configPath), dir)
+	}
+	return dir, true, nil
+}
+
+func avatarModelConfigFiles(dir string) ([]string, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, fmt.Errorf("avatar model config dir not found: %s: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("avatar model config dir is not a directory: %s", dir)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read avatar model config dir %s: %w", dir, err)
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+			files = append(files, filepath.Join(dir, name))
+		}
+	}
+	return files, nil
+}
+
+func singleAvatarModelNode(path string) (string, *yaml.Node, error) {
+	doc, err := ReadYAMLNode(path)
+	if err != nil {
+		return "", nil, err
+	}
+	root := mappingRoot(doc)
+	if root == nil || root.Kind != yaml.MappingNode {
+		return "", nil, fmt.Errorf("avatar model config root must be a mapping: %s", path)
+	}
+	if len(root.Content) != 2 {
+		return "", nil, fmt.Errorf("avatar model config file must contain exactly one top-level model: %s", path)
+	}
+	nameNode := root.Content[0]
+	modelNode := root.Content[1]
+	modelName := strings.TrimSpace(nameNode.Value)
+	if modelName == "" {
+		return "", nil, fmt.Errorf("avatar model config name must be non-empty: %s", path)
+	}
+	if modelNode.Kind != yaml.MappingNode {
+		return "", nil, fmt.Errorf("avatar model config value must be a mapping: %s", path)
+	}
+	return modelName, modelNode, nil
+}
+
+// MergeAvatarModelConfigDir appends external avatar model mappings to
+// inference.avatar. Inline model configs in the main file take precedence.
+func MergeAvatarModelConfigDir(doc *yaml.Node, configPath string) error {
+	avatar, err := GetNodeAtPath(doc, "inference.avatar")
+	if err != nil || avatar.Kind != yaml.MappingNode {
+		return nil
+	}
+	dir, ok, err := avatarModelConfigDir(doc, configPath)
+	if err != nil || !ok {
+		return err
+	}
+	files, err := avatarModelConfigFiles(dir)
+	if err != nil {
+		return err
+	}
+	externalModels := map[string]string{}
+	for _, file := range files {
+		modelName, modelNode, err := singleAvatarModelNode(file)
+		if err != nil {
+			return err
+		}
+		if previous, exists := externalModels[modelName]; exists {
+			return fmt.Errorf("duplicate avatar model config for %q: %s and %s", modelName, previous, file)
+		}
+		externalModels[modelName] = file
+		if mappingHasKey(avatar, modelName) {
+			continue
+		}
+		avatar.Content = append(
+			avatar.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: modelName},
+			cloneYAMLNode(modelNode),
+		)
+	}
+	return nil
+}
+
+// AvatarModelConfigSource returns the file that owns writable params for a
+// model. Inline model config in the main file wins over external configs.
+func AvatarModelConfigSource(configPath, modelName string) (string, bool, error) {
+	if strings.TrimSpace(modelName) == "" {
+		return "", false, fmt.Errorf("avatar model name is empty")
+	}
+	doc, err := ReadYAMLNode(configPath)
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := GetNodeAtPath(doc, "inference.avatar."+modelName); err == nil {
+		return configPath, false, nil
+	}
+	dir, ok, err := avatarModelConfigDir(doc, configPath)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, fmt.Errorf("avatar model config not found for %q", modelName)
+	}
+	files, err := avatarModelConfigFiles(dir)
+	if err != nil {
+		return "", false, err
+	}
+	externalModels := map[string]string{}
+	for _, file := range files {
+		name, _, err := singleAvatarModelNode(file)
+		if err != nil {
+			return "", false, err
+		}
+		if previous, exists := externalModels[name]; exists {
+			return "", false, fmt.Errorf("duplicate avatar model config for %q: %s and %s", name, previous, file)
+		}
+		externalModels[name] = file
+	}
+	if path, ok := externalModels[modelName]; ok {
+		return path, true, nil
+	}
+	return "", false, fmt.Errorf("avatar model config not found for %q", modelName)
+}
+
+// AvatarModelExternalDotPath maps inference.avatar.<model>.* to <model>.*
+// for writes into a single-model external avatar config file.
+func AvatarModelExternalDotPath(modelName, fullPath string) (string, error) {
+	prefix := "inference.avatar." + modelName + "."
+	if !strings.HasPrefix(fullPath, prefix) {
+		return "", fmt.Errorf("parameter %q is not in scope for model %q", fullPath, modelName)
+	}
+	return modelName + "." + strings.TrimPrefix(fullPath, prefix), nil
 }
 
 // SetNodeAtPath sets a scalar value at the given dot-path.

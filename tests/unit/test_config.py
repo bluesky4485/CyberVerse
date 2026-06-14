@@ -1,5 +1,6 @@
 """Tests for config loader with regex-based env var substitution."""
 import os
+from pathlib import Path
 import tempfile
 
 import pytest
@@ -106,3 +107,140 @@ def test_multiple_vars_in_one_line():
             del os.environ["TEST_HOST"]
             del os.environ["TEST_PORT"]
             os.unlink(f.name)
+
+
+def test_avatar_model_config_dir_is_merged_relative_to_main_config():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        model_dir = root / "avatar_models"
+        model_dir.mkdir()
+        (model_dir / "flash_head.yaml").write_text(
+            """
+flash_head:
+  plugin_class: pkg.FlashHead
+  checkpoint_dir: /models/flash
+  infer_params:
+    width: 512
+    height: 288
+""",
+            encoding="utf-8",
+        )
+        config_path = root / "cyberverse_config.yaml"
+        config_path.write_text(
+            """
+inference:
+  avatar:
+    default: flash_head
+    model_config_dir: avatar_models
+""",
+            encoding="utf-8",
+        )
+
+        config = load_config(config_path)
+
+    assert config["inference"]["avatar"]["flash_head"]["plugin_class"] == "pkg.FlashHead"
+    assert config["inference"]["avatar"]["flash_head"]["infer_params"]["height"] == 288
+
+
+def test_inline_avatar_model_config_wins_over_external_config():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        model_dir = root / "avatar_models"
+        model_dir.mkdir()
+        (model_dir / "flash_head.yaml").write_text(
+            """
+flash_head:
+  plugin_class: pkg.External
+  compile_model: false
+""",
+            encoding="utf-8",
+        )
+        config_path = root / "cyberverse_config.yaml"
+        config_path.write_text(
+            """
+inference:
+  avatar:
+    model_config_dir: avatar_models
+    flash_head:
+      plugin_class: pkg.Inline
+      compile_model: true
+""",
+            encoding="utf-8",
+        )
+
+        config = load_config(config_path)
+
+    assert config["inference"]["avatar"]["flash_head"]["plugin_class"] == "pkg.Inline"
+    assert config["inference"]["avatar"]["flash_head"]["compile_model"] is True
+
+
+def test_avatar_model_config_dir_expands_env_vars():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        model_dir = root / "avatar_models"
+        model_dir.mkdir()
+        (model_dir / "live_act.yaml").write_text(
+            """
+live_act:
+  ckpt_dir: ${TEST_CYBERVERSE_MODEL_DIR}
+""",
+            encoding="utf-8",
+        )
+        config_path = root / "cyberverse_config.yaml"
+        config_path.write_text(
+            """
+inference:
+  avatar:
+    model_config_dir: avatar_models
+""",
+            encoding="utf-8",
+        )
+        os.environ["TEST_CYBERVERSE_MODEL_DIR"] = "/models/live_act"
+        try:
+            config = load_config(config_path)
+        finally:
+            del os.environ["TEST_CYBERVERSE_MODEL_DIR"]
+
+    assert config["inference"]["avatar"]["live_act"]["ckpt_dir"] == "/models/live_act"
+
+
+def test_avatar_model_config_dir_missing_raises():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / "cyberverse_config.yaml"
+        config_path.write_text(
+            """
+inference:
+  avatar:
+    model_config_dir: avatar_models
+""",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(FileNotFoundError):
+            load_config(config_path)
+
+
+def test_avatar_model_config_file_requires_one_top_level_model():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        model_dir = root / "avatar_models"
+        model_dir.mkdir()
+        (model_dir / "bad.yaml").write_text(
+            """
+flash_head: {}
+live_act: {}
+""",
+            encoding="utf-8",
+        )
+        config_path = root / "cyberverse_config.yaml"
+        config_path.write_text(
+            """
+inference:
+  avatar:
+    model_config_dir: avatar_models
+""",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError):
+            load_config(config_path)
