@@ -54,7 +54,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
         open
           ? props.success
             ? 'border-cv-success shadow-[0_0_0_2px_rgba(34,197,94,0.15)]'
-            : 'border-cv-accent shadow-[0_0_0_2px_rgba(59,130,246,0.15)]'
+            : 'border-cv-text-muted shadow-[0_0_0_2px_rgba(139,168,194,0.14)]'
           : props.success
             ? 'border-cv-success hover:border-cv-success'
             : 'hover:border-cv-text-muted',
@@ -105,7 +105,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
           @click="select(opt.value)"
           class="w-full px-4 py-2.5 text-sm text-left cursor-pointer transition-colors"
           :class="opt.value === modelValue
-            ? 'bg-cv-accent-muted text-cv-accent font-medium'
+            ? 'bg-white/[0.06] text-cv-text font-medium'
             : 'text-cv-text hover:bg-cv-hover'"
         >
           {{ opt.label }}

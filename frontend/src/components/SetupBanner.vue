@@ -27,7 +27,7 @@ defineProps<{ show: boolean }>()
     </div>
     <div class="flex items-center gap-3 shrink-0">
       <button @click="router.push('/settings')"
-              class="px-4 py-1.5 bg-cv-accent text-white text-[13px] font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer">
+              class="cv-pi-button cv-pi-button--primary cv-pi-button--compact">
         {{ t('setup.action') }}
       </button>
       <button @click="dismissed = true"

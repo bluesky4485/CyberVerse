@@ -32,11 +32,26 @@ export interface KnowledgeUploadSkippedFile {
 }
 
 // Character data model
+export type AvatarBackend = 'local_image' | 'baidu_xiling'
+
+export interface BaiduXilingCharacterConfig {
+  figure_id: string
+  figure_name?: string
+  thumbnail_url?: string
+  preview_video_url?: string
+  source_image_url?: string
+  status?: string
+  width?: number
+  height?: number
+}
+
 export interface Character {
   id: string
   name: string
   description: string
   avatar_image: string
+  avatar_backend: AvatarBackend
+  baidu_xiling?: BaiduXilingCharacterConfig | null
   idle_video_url?: string
   idle_video_urls?: string[]
   use_face_crop: boolean

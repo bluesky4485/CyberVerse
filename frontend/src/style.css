@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=Noto+Serif+SC:wght@600;700;900&display=swap');
 @import "tailwindcss";
 
 /* Design tokens as CSS custom properties */
@@ -39,10 +39,167 @@
 /* Base styles */
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: var(--color-cv-base);
+  background-color: var(--color-cv-base);
+  background-image:
+    linear-gradient(rgba(92, 109, 132, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 109, 132, 0.14) 1px, transparent 1px);
+  background-size: 20px 20px;
   color: var(--color-cv-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.cv-display-title {
+  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.cv-mono {
+  font-family: 'Azeret Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.cv-pi-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  border: 1px solid rgba(104, 115, 132, 0.58);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 0 16px;
+  color: rgba(221, 225, 231, 0.78);
+  font-family: 'Azeret Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  cursor: pointer;
+}
+
+.cv-pi-button::before,
+.cv-pi-button::after {
+  color: rgba(128, 157, 184, 0.9);
+  font-weight: 500;
+}
+
+.cv-pi-button::before {
+  content: "[";
+}
+
+.cv-pi-button::after {
+  content: "]";
+}
+
+.cv-pi-button:hover:not(:disabled) {
+  border-color: rgba(164, 176, 192, 0.72);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 247, 250, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.cv-pi-button:focus-visible {
+  outline: 2px solid rgba(139, 168, 194, 0.55);
+  outline-offset: 2px;
+}
+
+.cv-pi-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.cv-pi-button--primary {
+  border-color: rgba(183, 194, 208, 0.7);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(249, 251, 253, 0.95);
+}
+
+.cv-pi-button--primary:hover:not(:disabled) {
+  border-color: rgba(226, 232, 240, 0.88);
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.cv-pi-button--danger {
+  border-color: rgba(239, 68, 68, 0.78);
+  background: rgba(239, 68, 68, 0.035);
+  color: rgba(255, 128, 128, 0.94);
+}
+
+.cv-pi-button--danger::before,
+.cv-pi-button--danger::after {
+  color: rgba(255, 104, 104, 0.9);
+}
+
+.cv-pi-button--danger:hover:not(:disabled) {
+  border-color: rgba(255, 104, 104, 0.96);
+  background: rgba(239, 68, 68, 0.075);
+  color: rgba(255, 210, 210, 0.96);
+}
+
+.cv-pi-button--compact {
+  min-height: 36px;
+  padding: 0 13px;
+  font-size: 11px;
+}
+
+.cv-pi-button--large {
+  min-height: 46px;
+  padding: 0 22px;
+}
+
+.cv-pi-segment {
+  display: grid;
+  border: 1px solid rgba(104, 115, 132, 0.5);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.cv-pi-segment-item {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0;
+  color: rgba(139, 139, 158, 0.9);
+  font-family: 'Azeret Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.cv-pi-segment-item:not(.cv-pi-segment-item--active):hover {
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(221, 225, 231, 0.8);
+}
+
+.cv-pi-segment-item--active {
+  border-color: rgba(221, 225, 231, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(244, 246, 248, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.bg-cv-base {
+  background-color: var(--color-cv-base);
+  background-image:
+    linear-gradient(rgba(92, 109, 132, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 109, 132, 0.14) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 /* Scrollbar styling */

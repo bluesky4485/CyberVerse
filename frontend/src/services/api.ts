@@ -1,4 +1,4 @@
-import type { AvatarModelInfo, Character, CharacterForm, ComponentsResponse, ImageInfo, KnowledgeSource, KnowledgeUploadSkippedFile, Settings, LaunchConfig, LaunchConfigUpdate, PipelineMode } from '../types'
+import type { AvatarModelInfo, BaiduXilingCharacterConfig, Character, CharacterForm, ComponentsResponse, ImageInfo, KnowledgeSource, KnowledgeUploadSkippedFile, Settings, LaunchConfig, LaunchConfigUpdate, PipelineMode } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 
@@ -189,6 +189,10 @@ export async function testCharacterVoice(data: { voice_provider: string; voice_t
     method: 'POST',
     body: JSON.stringify(data),
   })
+}
+
+export async function getBaiduXilingFigure(figureId: string): Promise<BaiduXilingCharacterConfig> {
+  return request(`/baidu-xiling/figures/${encodeURIComponent(figureId)}`)
 }
 
 export async function uploadAvatar(id: string, file: File): Promise<{ path: string; filename?: string }> {

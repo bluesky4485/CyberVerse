@@ -9,10 +9,14 @@ const router = useRouter()
 const { t, locale } = useI18n()
 const props = defineProps<{ character: Character }>()
 const emit = defineEmits<{ delete: [id: string] }>()
+const isBaiduXiling = computed(() => props.character.avatar_backend === 'baidu_xiling')
+const baiduFigureId = computed(() => props.character.baidu_xiling?.figure_id || '')
 const coverImage = computed(() =>
-  props.character.active_image
-    ? `/api/v1/characters/${props.character.id}/images/${encodeURIComponent(props.character.active_image)}`
-    : props.character.avatar_image
+  isBaiduXiling.value
+    ? (props.character.baidu_xiling?.thumbnail_url || props.character.baidu_xiling?.source_image_url || '')
+    : props.character.active_image
+      ? `/api/v1/characters/${props.character.id}/images/${encodeURIComponent(props.character.active_image)}`
+      : props.character.avatar_image
 )
 
 // Generate a gradient from character name hash
@@ -40,6 +44,17 @@ function edit() {
     <div class="absolute inset-0">
       <div class="w-full h-full" :style="{ background: coverImage ? undefined : nameToGradient(character.name) }">
         <img v-if="coverImage" :src="coverImage" :alt="character.name" class="w-full h-full object-cover object-top" />
+        <div
+          v-else-if="isBaiduXiling"
+          class="flex h-full flex-col items-center justify-center px-6 text-center"
+        >
+          <div class="rounded-cv-sm border border-cv-accent/30 bg-cv-accent/10 px-2 py-1 text-[11px] font-medium text-cv-accent">
+            {{ t('characterCard.baiduDigitalHuman') }}
+          </div>
+          <div class="mt-3 max-w-full break-all text-[12px] leading-5 text-cv-text/70">
+            {{ baiduFigureId }}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -74,16 +89,16 @@ function edit() {
         <!-- Footer -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-cv-success" />
+            <span class="w-1.5 h-1.5 rounded-full" :class="isBaiduXiling ? 'bg-cv-accent' : 'bg-cv-success'" />
             <span
               class="max-w-[165px] truncate text-[11px] text-cv-text/60 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]"
-              :title="formatVoiceTypeDisplay(character.voice_type, t, locale)"
+              :title="isBaiduXiling ? t('characterCard.baiduDigitalHuman') : formatVoiceTypeDisplay(character.voice_type, t, locale)"
             >
-              {{ formatVoiceTypeDisplay(character.voice_type, t, locale) }}
+              {{ isBaiduXiling ? t('characterCard.baiduDigitalHuman') : formatVoiceTypeDisplay(character.voice_type, t, locale) }}
             </span>
           </div>
           <button @click.stop="launch"
-                  class="px-4 py-1.5 bg-cv-accent text-white text-[13px] font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer">
+                  class="cv-pi-button cv-pi-button--primary cv-pi-button--compact">
             {{ t('characterCard.launch') }}
           </button>
         </div>

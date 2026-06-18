@@ -20,25 +20,25 @@ const { t } = useI18n()
   <div class="control-bar">
     <button
       v-if="connectionState === 'disconnected' || connectionState === 'error'"
-      class="btn btn-primary"
+      class="cv-pi-button cv-pi-button--primary cv-pi-button--compact"
       @click="$emit('connect')"
     >
       {{ t('controlBar.connect') }}
     </button>
     <button
       v-else-if="connectionState === 'connected'"
-      class="btn btn-danger"
+      class="cv-pi-button cv-pi-button--danger cv-pi-button--compact"
       @click="$emit('disconnect')"
     >
       {{ t('controlBar.disconnect') }}
     </button>
-    <button v-else class="btn" disabled>
+    <button v-else class="cv-pi-button cv-pi-button--compact" disabled>
       {{ t('controlBar.connecting') }}
     </button>
 
     <button
-      class="btn"
-      :class="{ 'btn-muted': isMuted }"
+      class="cv-pi-button cv-pi-button--compact"
+      :class="{ 'cv-pi-button--primary': isMuted }"
       @click="$emit('toggleMute')"
       :disabled="connectionState !== 'connected'"
     >
@@ -60,23 +60,6 @@ const { t } = useI18n()
   background: #1e1e1e;
   border-radius: 12px;
 }
-
-.btn {
-  padding: 8px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  background: #333;
-  color: white;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.btn-primary { background: #2563eb; }
-.btn-danger { background: #dc2626; }
-.btn-muted { background: #ca8a04; }
 
 .connection-status {
   margin-left: auto;

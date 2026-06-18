@@ -47,11 +47,11 @@ async function handleDelete(id: string) {
       <!-- Title area -->
       <div class="flex items-start justify-between mb-8">
         <div>
-          <h1 class="text-[32px] font-semibold text-cv-text tracking-[-0.5px]">{{ t('characterList.title') }}</h1>
+          <h1 class="cv-display-title text-[32px] text-cv-text">{{ t('characterList.title') }}</h1>
           <p class="mt-2 text-sm text-cv-text-secondary">{{ t('characterList.subtitle') }}</p>
         </div>
         <button @click="router.push('/characters/new')"
-                class="px-5 py-2.5 bg-cv-accent text-white text-sm font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer">
+                class="cv-pi-button cv-pi-button--primary">
           {{ t('characterList.create') }}
         </button>
       </div>
@@ -86,7 +86,7 @@ async function handleDelete(id: string) {
           <span v-html="t('characterList.emptyBody')" />
         </p>
         <button @click="router.push('/characters/new')"
-                class="px-7 py-3 bg-cv-accent text-white text-sm font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer">
+                class="cv-pi-button cv-pi-button--primary cv-pi-button--large">
           {{ t('characterList.createFirst') }}
         </button>
       </div>

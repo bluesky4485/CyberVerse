@@ -34,6 +34,15 @@ const runtimeConfigMismatch = computed(() =>
   !!configuredDefaultModel.value &&
   activeAvatarModel.value !== configuredDefaultModel.value
 )
+const isBaiduXilingCharacter = computed(() => store.current?.avatar_backend === 'baidu_xiling')
+const characterCoverImage = computed(() => {
+  const character = store.current
+  if (!character) return ''
+  if (character.avatar_backend === 'baidu_xiling') {
+    return character.baidu_xiling?.thumbnail_url || character.baidu_xiling?.source_image_url || ''
+  }
+  return character.avatar_image || ''
+})
 
 // Input width auto-sizing (in ch units)
 const INPUT_MIN_WIDTH_CH = 16
@@ -190,8 +199,25 @@ async function launch() {
       <aside class="w-[380px] shrink-0 p-8 pt-10 ml-16">
         <div v-if="store.current" class="bg-cv-surface border border-cv-border rounded-cv-lg overflow-hidden shadow-[0_4px_16px_-2px_rgba(0,0,0,0.25)]">
           <!-- Avatar image -->
-          <div class="h-[220px] bg-gradient-to-b from-[#142659] to-[#2e1a66] rounded-t-cv-lg ">
-            <img v-if="store.current.avatar_image" :src="store.current.avatar_image" class="w-full h-full object-cover" :alt="store.current.name" />
+          <div class="relative h-[220px] bg-gradient-to-b from-[#142659] to-[#2e1a66] rounded-t-cv-lg ">
+            <img v-if="characterCoverImage" :src="characterCoverImage" class="w-full h-full object-cover" :alt="store.current.name" />
+            <div
+              v-else-if="isBaiduXilingCharacter"
+              class="flex h-full flex-col items-center justify-center gap-2 px-6 text-center"
+            >
+              <span class="rounded-cv-sm border border-cv-accent/30 bg-cv-accent/10 px-2 py-1 text-[11px] text-cv-accent">
+                {{ t('characterCard.baiduDigitalHuman') }}
+              </span>
+              <span class="break-all text-[12px] leading-5 text-cv-text/70">
+                {{ store.current.baidu_xiling?.figure_id }}
+              </span>
+            </div>
+            <span
+              v-if="isBaiduXilingCharacter"
+              class="absolute left-3 top-3 rounded-cv-sm border border-cv-accent/30 bg-black/55 px-2 py-1 text-[11px] text-cv-accent backdrop-blur-sm"
+            >
+              {{ t('characterCard.baiduDigitalHuman') }}
+            </span>
           </div>
 
           <div class="p-5 flex flex-col gap-4">

@@ -420,7 +420,7 @@ onUnmounted(stopPolling)
         <button
           type="button"
           :disabled="saving"
-          class="h-[38px] rounded-cv-md bg-cv-accent px-4 text-sm font-medium text-white transition-colors hover:bg-cv-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+          class="cv-pi-button cv-pi-button--primary cv-pi-button--compact h-[38px] disabled:cursor-not-allowed disabled:opacity-40"
           @click.stop="chooseFiles"
         >
           {{ t('characterEdit.chooseMaterialFiles') }}
@@ -428,7 +428,7 @@ onUnmounted(stopPolling)
         <button
           type="button"
           :disabled="saving"
-          class="h-[38px] rounded-cv-md border border-cv-border px-4 text-sm text-cv-text-secondary transition-colors hover:bg-cv-hover hover:text-cv-text disabled:cursor-not-allowed disabled:opacity-40"
+          class="cv-pi-button cv-pi-button--compact h-[38px] disabled:cursor-not-allowed disabled:opacity-40"
           @click.stop="chooseFolder"
         >
           {{ t('characterEdit.chooseMaterialFolder') }}

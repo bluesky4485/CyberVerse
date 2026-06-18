@@ -677,7 +677,7 @@ async function applyCrop() {
       <!-- Set as active button -->
       <button v-else-if="currentImage?.filename && imageMode !== 'random'"
               @click.stop="emit('activateImage', currentImage!.filename!)"
-              class="absolute bottom-3 left-3 px-2.5 py-1 bg-black/60 text-white/80 text-[11px] font-medium rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm flex items-center gap-1 cursor-pointer hover:bg-cv-accent/80">
+              class="absolute bottom-3 left-3 px-2.5 py-1 bg-black/60 text-white/80 text-[11px] font-medium rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm flex items-center gap-1 cursor-pointer hover:bg-black/80">
         <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 8.5l3.5 3.5L13 5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -760,9 +760,9 @@ async function applyCrop() {
         <span class="text-[13px] text-cv-text-secondary">{{ t('avatarUpload.faceCrop') }}</span>
         <button @click="emit('update:useFaceCrop', !useFaceCrop)"
                 class="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                :class="useFaceCrop ? 'bg-cv-accent' : 'bg-cv-elevated'">
+                :class="useFaceCrop ? 'bg-cv-text-secondary' : 'bg-cv-elevated'">
           <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform duration-200"
-                :class="useFaceCrop ? 'translate-x-5 bg-white' : 'translate-x-0 bg-cv-text-muted'" />
+                :class="useFaceCrop ? 'translate-x-5 bg-cv-text' : 'translate-x-0 bg-cv-text-muted'" />
         </button>
       </div>
       <p class="text-[11px] text-cv-text-muted mt-2 leading-4">{{ t('avatarUpload.faceCropHint') }}</p>
@@ -908,14 +908,14 @@ async function applyCrop() {
 
               <div class="mt-5 flex gap-2">
                 <button
-                  class="h-10 flex-1 rounded-cv-md bg-cv-accent px-3 text-sm font-medium text-white transition-colors enabled:hover:bg-cv-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  class="cv-pi-button cv-pi-button--primary cv-pi-button--compact h-10 flex-1 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canApplyCrop"
                   @click="applyCrop"
                 >
                   {{ applyingCrop ? '处理中...' : '应用裁剪' }}
                 </button>
                 <button
-                  class="h-10 rounded-cv-md border border-cv-border px-3 text-sm font-medium text-cv-text-secondary transition-colors hover:bg-cv-hover"
+                  class="cv-pi-button cv-pi-button--compact h-10"
                   @click="createDefaultCropBox"
                 >
                   重置

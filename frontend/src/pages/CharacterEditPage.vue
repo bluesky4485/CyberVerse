@@ -7,9 +7,9 @@ import AvatarUpload from '../components/AvatarUpload.vue'
 import CvSelect from '../components/CvSelect.vue'
 import KnowledgeSourceManager from '../components/KnowledgeSourceManager.vue'
 import { useCharacterStore } from '../stores/characters'
-import type { CharacterComponents, CharacterForm, ComponentOption, ComponentsResponse, ImageInfo } from '../types'
+import type { AvatarBackend, BaiduXilingCharacterConfig, CharacterComponents, CharacterForm, ComponentOption, ComponentsResponse, ImageInfo } from '../types'
 import { OPENAI_VOICE_OPTIONS, QWEN_OMNI_VOICE_OPTIONS, QWEN_TTS_VOICE_OPTIONS, VOICE_OPTIONS } from '../types'
-import { uploadAvatar, getCharacterImages, deleteCharacterImage, activateCharacterImage, testCharacterVoice, getComponents } from '../services/api'
+import { uploadAvatar, getCharacterImages, deleteCharacterImage, activateCharacterImage, testCharacterVoice, getComponents, getBaiduXilingFigure } from '../services/api'
 import { DEFAULT_OFFICIAL_VOICE, DEFAULT_QWEN_OMNI_VOICE, DEFAULT_QWEN_TTS_VOICE, isOfficialVoiceType, isOpenAIVoiceType, isQwenOmniVoiceType, isQwenTTSVoiceType, localizedVoiceOptions } from '../utils/voice'
 
 const router = useRouter()
@@ -26,6 +26,8 @@ const form = ref<CharacterForm>({
   name: '',
   description: '',
   avatar_image: '',
+  avatar_backend: 'local_image',
+  baidu_xiling: null,
   use_face_crop: false,
   image_mode: 'fixed',
   mode: 'standard',
@@ -51,10 +53,13 @@ const voiceTestStatus = ref<'success' | 'error' | null>(null)
 const voiceTestMessage = ref('')
 const showModeHelp = ref(false)
 const hydratingCharacter = ref(false)
+const baiduLookupLoading = ref(false)
+const baiduLookupError = ref('')
 const OFFICIAL_VOICE_PREVIEW_URL = 'https://console.volcengine.com/speech/new/experience/call'
 const CUSTOM_VOICE_CLONE_URL = 'https://console.volcengine.com/speech/new/experience/clone'
 const QWEN_TTS_VOICE_PREVIEW_URL = 'https://help.aliyun.com/zh/model-studio/qwen-tts-realtime'
 const QWEN_OMNI_VOICE_LIST_URL = 'https://help.aliyun.com/zh/model-studio/omni-voice-list'
+const BAIDU_XILING_OVERVIEW_URL = 'https://xiling.cloud.baidu.com/open/overview'
 const componentCatalog = ref<ComponentsResponse>({
   llm: [{ id: 'qwen', name: 'Qwen', model: 'qwen3.6-plus', default: true, available: true }],
   asr: [{ id: 'qwen', name: 'Qwen', model: 'qwen3-asr-flash-realtime', default: true, available: true }],
@@ -65,6 +70,38 @@ const visibleImages = computed(() =>
   images.value.filter(img => !deletedImageFilenames.value.has(img.filename))
 )
 
+const isBaiduXilingAvatar = computed(() => form.value.avatar_backend === 'baidu_xiling')
+const baiduFigureId = computed({
+  get: () => form.value.baidu_xiling?.figure_id || '',
+  set: (value: string) => {
+    form.value.baidu_xiling = {
+      ...(form.value.baidu_xiling || { figure_id: '' }),
+      figure_id: value,
+    }
+    baiduLookupError.value = ''
+  },
+})
+const baiduPreviewImage = computed(() =>
+  form.value.baidu_xiling?.thumbnail_url
+  || form.value.baidu_xiling?.source_image_url
+  || ''
+)
+const baiduFigureLabel = computed(() =>
+  form.value.baidu_xiling?.figure_name
+  || form.value.baidu_xiling?.figure_id
+  || ''
+)
+const hasRequiredAvatarConfig = computed(() =>
+  form.value.avatar_backend !== 'baidu_xiling' || !!baiduFigureId.value.trim()
+)
+const avatarBackendModel = computed({
+  get: () => form.value.avatar_backend,
+  set: (value: string) => selectAvatarBackend(normalizeAvatarBackend(value)),
+})
+const avatarBackendOptions = computed(() => [
+  { label: t('characterEdit.localAvatar'), value: 'local_image' },
+  { label: t('characterEdit.baiduDigitalHuman'), value: 'baidu_xiling' },
+])
 const trimmedCustomVoiceType = computed(() => customVoiceType.value.trim())
 const selectedTTS = computed(() => form.value.components?.tts || DEFAULT_COMPONENTS.tts)
 const selectedOmniProvider = computed(() => form.value.voice_provider || 'doubao')
@@ -117,7 +154,7 @@ const qwenOmniVoiceOptions = computed(() => localizedVoiceOptions(QWEN_OMNI_VOIC
 const officialVoiceOptions = computed(() => localizedVoiceOptions(VOICE_OPTIONS, locale.value))
 const openAIVoiceOptions = computed(() => localizedVoiceOptions(OPENAI_VOICE_OPTIONS, locale.value))
 const canSave = computed(() =>
-  !!form.value.name.trim() && (
+  !!form.value.name.trim() && hasRequiredAvatarConfig.value && (
     usesDoubaoVoice.value
       ? (voiceMode.value === 'official' || !!trimmedCustomVoiceType.value)
       : !!form.value.voice_type.trim()
@@ -153,6 +190,61 @@ function normalizeOmniProvider(provider: string) {
 
 function normalizeMode(mode?: string): CharacterForm['mode'] {
   return mode === 'omni' || mode === 'voice_llm' ? 'omni' : 'standard'
+}
+
+function normalizeAvatarBackend(backend?: string): AvatarBackend {
+  return backend === 'baidu_xiling' ? 'baidu_xiling' : 'local_image'
+}
+
+function emptyBaiduXilingConfig(figureId = ''): BaiduXilingCharacterConfig {
+  return { figure_id: figureId }
+}
+
+function selectAvatarBackend(backend: AvatarBackend) {
+  form.value.avatar_backend = backend
+  baiduLookupError.value = ''
+  if (backend === 'baidu_xiling' && !form.value.baidu_xiling) {
+    form.value.baidu_xiling = emptyBaiduXilingConfig()
+  }
+}
+
+function applyBaiduFigure(figure: BaiduXilingCharacterConfig) {
+  const figureName = figure.figure_name || ''
+  form.value.baidu_xiling = {
+    figure_id: figure.figure_id || baiduFigureId.value.trim(),
+    figure_name: figureName,
+    thumbnail_url: figure.thumbnail_url || '',
+    preview_video_url: figure.preview_video_url || '',
+    source_image_url: figure.source_image_url || '',
+    status: figure.status || '',
+    width: figure.width || 0,
+    height: figure.height || 0,
+  }
+  if (figureName) {
+    form.value.name = figureName
+  }
+}
+
+async function lookupBaiduFigure() {
+  const figureId = baiduFigureId.value.trim()
+  baiduLookupError.value = ''
+  if (!figureId) {
+    baiduLookupError.value = t('characterEdit.baiduFigureRequired')
+    return
+  }
+  baiduLookupLoading.value = true
+  try {
+    const figure = await getBaiduXilingFigure(figureId)
+    applyBaiduFigure(figure)
+  } catch (e) {
+    form.value.baidu_xiling = {
+      ...(form.value.baidu_xiling || emptyBaiduXilingConfig()),
+      figure_id: figureId,
+    }
+    baiduLookupError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    baiduLookupLoading.value = false
+  }
 }
 
 function applyTTSVoiceDefault(tts: string, force = false) {
@@ -326,6 +418,8 @@ onMounted(async () => {
           name: c.name,
           description: c.description,
           avatar_image: c.avatar_image,
+          avatar_backend: normalizeAvatarBackend(c.avatar_backend),
+          baidu_xiling: c.baidu_xiling ? { ...c.baidu_xiling } : null,
           use_face_crop: c.use_face_crop,
           image_mode: c.image_mode || 'fixed',
           mode: normalizeMode(c.mode),
@@ -360,6 +454,7 @@ async function loadImages() {
 }
 
 async function handleFileSelected(file: File, options?: { activate?: boolean }) {
+  if (form.value.avatar_backend === 'baidu_xiling') return
   if (isEdit.value) {
     // Edit mode: upload immediately
     try {
@@ -454,6 +549,15 @@ async function save() {
     payload.voice_provider = payload.mode === 'omni'
       ? normalizeOmniProvider(payload.voice_provider)
       : payload.components.tts
+    payload.avatar_backend = normalizeAvatarBackend(payload.avatar_backend)
+    if (payload.avatar_backend === 'baidu_xiling') {
+      payload.baidu_xiling = {
+        ...(payload.baidu_xiling || emptyBaiduXilingConfig()),
+        figure_id: (payload.baidu_xiling?.figure_id || '').trim(),
+      }
+      payload.use_face_crop = false
+      payload.image_mode = 'fixed'
+    }
 
     let id: string
     if (isEdit.value) {
@@ -469,9 +573,11 @@ async function save() {
       await deleteCharacterImage(id, filename)
     }
 
-    // Upload all pending files
-    for (const file of pendingFiles.value) {
-      await uploadAvatar(id, file)
+    if (payload.avatar_backend === 'local_image') {
+      // Upload all pending files
+      for (const file of pendingFiles.value) {
+        await uploadAvatar(id, file)
+      }
     }
 
     router.push('/characters')
@@ -503,14 +609,42 @@ const breadcrumb = computed(() =>
 
     <!-- Page title -->
     <div class="text-center py-8">
-      <h1 class="text-2xl font-bold text-cv-text">{{ isEdit ? t('characterEdit.pageTitleEdit') : t('characterEdit.pageTitleCreate') }}</h1>
+      <h1 class="cv-display-title text-2xl text-cv-text">{{ isEdit ? t('characterEdit.pageTitleEdit') : t('characterEdit.pageTitleCreate') }}</h1>
     </div>
 
     <!-- Content -->
     <main class="flex-1 max-w-[1100px] mx-auto w-full px-12 pb-24 flex gap-8">
       <!-- Left column: Avatar -->
       <div class="w-[300px] shrink-0">
+        <div class="mb-4 rounded-cv-lg border border-cv-border bg-cv-surface p-3">
+          <div class="mb-2 text-[12px] font-medium text-cv-text-muted">{{ t('characterEdit.avatarBackend') }}</div>
+          <CvSelect
+            v-model="avatarBackendModel"
+            :options="avatarBackendOptions"
+          />
+          <p v-if="!isBaiduXilingAvatar" class="mt-2 text-[11px] leading-5 text-cv-text-muted">
+            {{ t('characterEdit.localAvatarBackendHint') }}
+          </p>
+          <p v-else class="mt-2 text-[11px] leading-5 text-cv-text-muted">
+            <span>{{ t('characterEdit.baiduAvatarBackendHint') }}</span>
+            <a
+              :href="BAIDU_XILING_OVERVIEW_URL"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-cv-sm align-[-4px] text-cv-accent transition-colors hover:bg-cv-accent/10 focus:outline-none focus:ring-2 focus:ring-cv-accent/30"
+              :aria-label="t('characterEdit.baiduXilingLinkLabel')"
+              :title="t('characterEdit.baiduXilingLinkLabel')"
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+          </p>
+        </div>
+
         <AvatarUpload
+          v-if="!isBaiduXilingAvatar"
           :use-face-crop="form.use_face_crop"
           :images="visibleImages"
           :character-id="isEdit ? characterId : undefined"
@@ -525,8 +659,50 @@ const breadcrumb = computed(() =>
           @activate-image="handleActivateImage"
         />
 
+        <div v-else class="rounded-cv-lg border border-cv-border bg-cv-surface p-4">
+          <div class="grid grid-cols-[minmax(0,1fr)_82px] gap-2">
+            <label class="flex h-11 overflow-hidden rounded-cv-md border border-cv-border bg-cv-elevated transition-all focus-within:border-cv-accent focus-within:shadow-[0_0_0_2px_rgba(59,130,246,0.15)]">
+              <span class="flex h-full w-[74px] shrink-0 items-center border-r border-cv-border px-3 text-[13px] font-medium text-cv-text-secondary">{{ t('characterEdit.baiduFigureId') }}</span>
+              <input
+                id="baidu-figure-id-input"
+                v-model="baiduFigureId"
+                type="text"
+                :placeholder="t('characterEdit.baiduFigureIdPlaceholder')"
+                class="h-full min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-cv-text placeholder:text-cv-text-muted focus:outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              @click="lookupBaiduFigure"
+              :disabled="baiduLookupLoading || !baiduFigureId.trim()"
+              class="cv-pi-button cv-pi-button--compact h-11"
+            >
+              {{ baiduLookupLoading ? t('characterEdit.baiduFigureChecking') : t('characterEdit.baiduFigureLookup') }}
+            </button>
+          </div>
+          <p v-if="baiduLookupError" class="mt-2 break-words text-[11px] leading-5 text-cv-danger">
+            {{ baiduLookupError }}
+          </p>
+
+          <div class="mt-4 overflow-hidden rounded-cv-md border border-cv-border bg-cv-elevated">
+            <img
+              v-if="baiduPreviewImage"
+              :src="baiduPreviewImage"
+              :alt="baiduFigureLabel"
+              class="block h-auto w-full"
+            />
+            <div v-else class="flex h-[180px] flex-col items-center justify-center px-4 text-center">
+              <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-cv-text-muted">
+                <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" stroke="currentColor" stroke-width="1.6" />
+                <path d="m5 16 4.2-4.2a1.2 1.2 0 0 1 1.7 0L14 15l1.2-1.2a1.2 1.2 0 0 1 1.7 0L20 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M15.5 8.5h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
         <!-- Image mode toggle -->
-        <div v-if="isEdit && visibleImages.length > 1"
+        <div v-if="!isBaiduXilingAvatar && isEdit && visibleImages.length > 1"
              class="mt-4 bg-cv-surface border border-cv-border rounded-cv-lg p-4">
           <div class="flex items-center justify-between">
             <div>
@@ -535,9 +711,9 @@ const breadcrumb = computed(() =>
             </div>
             <button @click="form.image_mode = form.image_mode === 'random' ? 'fixed' : 'random'"
                     class="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                    :class="form.image_mode === 'random' ? 'bg-cv-accent' : 'bg-cv-elevated'">
+                    :class="form.image_mode === 'random' ? 'bg-cv-text-secondary' : 'bg-cv-elevated'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform duration-200"
-                    :class="form.image_mode === 'random' ? 'translate-x-5 bg-white' : 'translate-x-0 bg-cv-text-muted'" />
+                    :class="form.image_mode === 'random' ? 'translate-x-5 bg-cv-text' : 'translate-x-0 bg-cv-text-muted'" />
             </button>
           </div>
         </div>
@@ -570,22 +746,18 @@ const breadcrumb = computed(() =>
               <button
                 type="button"
                 @click="toggleMode"
-                class="grid h-9 w-[280px] max-w-[calc(100vw-120px)] grid-cols-2 rounded-cv-md border border-cv-border bg-cv-elevated p-1 text-sm transition-colors cursor-pointer"
+                class="cv-pi-segment h-9 w-[280px] max-w-[calc(100vw-120px)] grid-cols-2 cursor-pointer"
                 :aria-label="t('characterEdit.modeToggleLabel', { mode: form.mode })"
               >
                 <span
-                  class="flex items-center justify-center rounded-cv-sm transition-colors"
-                  :class="form.mode === 'standard'
-                    ? 'bg-cv-accent text-white'
-                    : 'text-cv-text-secondary'"
+                  class="cv-pi-segment-item"
+                  :class="{ 'cv-pi-segment-item--active': form.mode === 'standard' }"
                 >
                   standard
                 </span>
                 <span
-                  class="flex items-center justify-center rounded-cv-sm transition-colors"
-                  :class="form.mode === 'omni'
-                    ? 'bg-cv-accent text-white'
-                    : 'text-cv-text-secondary'"
+                  class="cv-pi-segment-item"
+                  :class="{ 'cv-pi-segment-item--active': form.mode === 'omni' }"
                 >
                   {{ t('characterEdit.omniMode') }}
                 </span>
@@ -710,24 +882,20 @@ const breadcrumb = computed(() =>
               </label>
               <div v-else class="block">
                 <span class="text-[12px] font-medium text-cv-text-muted">{{ t('common.voice') }}</span>
-                <div class="mt-1.5 grid h-[42px] grid-cols-2 rounded-cv-md border border-cv-border bg-cv-elevated p-1">
+                <div class="cv-pi-segment mt-1.5 h-[42px] grid-cols-2">
                   <button
                     type="button"
                     @click="setVoiceMode('official')"
-                    class="rounded-cv-sm px-3 text-sm transition-colors cursor-pointer"
-                    :class="voiceMode === 'official'
-                      ? 'bg-cv-accent text-white'
-                      : 'text-cv-text-secondary hover:bg-cv-hover hover:text-cv-text'"
+                    class="cv-pi-segment-item cursor-pointer"
+                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'official' }"
                   >
                     {{ t('characterEdit.officialVoice') }}
                   </button>
                   <button
                     type="button"
                     @click="setVoiceMode('custom')"
-                    class="rounded-cv-sm px-3 text-sm transition-colors cursor-pointer"
-                    :class="voiceMode === 'custom'
-                      ? 'bg-cv-accent text-white'
-                      : 'text-cv-text-secondary hover:bg-cv-hover hover:text-cv-text'"
+                    class="cv-pi-segment-item cursor-pointer"
+                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'custom' }"
                   >
                     {{ t('characterEdit.clonedVoice') }}
                   </button>
@@ -764,7 +932,7 @@ const breadcrumb = computed(() =>
                     @click="handleCheckVoice"
                     :disabled="testingVoice || !canCheckVoice"
                     :class="{ 'opacity-40 cursor-not-allowed': testingVoice || !canCheckVoice }"
-                    class="inline-flex h-[42px] shrink-0 items-center rounded-cv-md border border-cv-border px-4 text-sm text-cv-text-secondary transition-all hover:bg-cv-hover hover:text-cv-text cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    class="cv-pi-button cv-pi-button--compact h-[42px] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {{ t('common.check') }}
                   </button>
@@ -793,24 +961,20 @@ const breadcrumb = computed(() =>
               </label>
               <div v-if="usesDoubaoVoice" class="block">
                 <span class="text-[12px] font-medium text-cv-text-muted">{{ t('characterEdit.voiceType') }}</span>
-                <div class="mt-1.5 grid h-[42px] grid-cols-2 rounded-cv-md border border-cv-border bg-cv-elevated p-1">
+                <div class="cv-pi-segment mt-1.5 h-[42px] grid-cols-2">
                   <button
                     type="button"
                     @click="setVoiceMode('official')"
-                    class="rounded-cv-sm px-3 text-sm transition-colors cursor-pointer"
-                    :class="voiceMode === 'official'
-                      ? 'bg-cv-accent text-white'
-                      : 'text-cv-text-secondary hover:bg-cv-hover hover:text-cv-text'"
+                    class="cv-pi-segment-item cursor-pointer"
+                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'official' }"
                   >
                     {{ t('characterEdit.officialVoice') }}
                   </button>
                   <button
                     type="button"
                     @click="setVoiceMode('custom')"
-                    class="rounded-cv-sm px-3 text-sm transition-colors cursor-pointer"
-                    :class="voiceMode === 'custom'
-                      ? 'bg-cv-accent text-white'
-                      : 'text-cv-text-secondary hover:bg-cv-hover hover:text-cv-text'"
+                    class="cv-pi-segment-item cursor-pointer"
+                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'custom' }"
                   >
                     {{ t('characterEdit.clonedVoice') }}
                   </button>
@@ -869,7 +1033,7 @@ const breadcrumb = computed(() =>
                     @click="handleCheckVoice"
                     :disabled="testingVoice || !canCheckVoice"
                     :class="{ 'opacity-40 cursor-not-allowed': testingVoice || !canCheckVoice }"
-                    class="inline-flex h-[42px] shrink-0 items-center rounded-cv-md border border-cv-border px-4 text-sm text-cv-text-secondary transition-all hover:bg-cv-hover hover:text-cv-text cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    class="cv-pi-button cv-pi-button--compact h-[42px] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {{ t('common.check') }}
                   </button>
@@ -966,18 +1130,18 @@ const breadcrumb = computed(() =>
     <div class="fixed bottom-0 left-0 right-0 bg-cv-surface border-t border-cv-border-subtle px-12 py-4 z-20">
       <div class="max-w-[1100px] mx-auto flex items-center justify-between">
         <button v-if="isEdit" @click="handleDelete"
-                class="text-cv-danger text-sm hover:bg-cv-danger-muted px-3 py-1.5 rounded-cv-md transition-colors cursor-pointer">
+                class="cv-pi-button cv-pi-button--danger cv-pi-button--compact">
           {{ t('characterEdit.deleteCharacter') }}
         </button>
         <div v-else />
         <div class="flex items-center gap-3">
           <button @click="router.back()"
-                  class="px-5 py-2.5 border border-cv-border text-cv-text-secondary text-sm rounded-cv-md hover:bg-cv-hover hover:text-cv-text transition-all cursor-pointer">
+                  class="cv-pi-button">
             {{ t('common.cancel') }}
           </button>
           <button @click="save" :disabled="saving || !canSave"
                   :class="{ 'opacity-40 cursor-not-allowed': saving || !canSave }"
-                  class="px-6 py-2.5 bg-cv-accent text-white text-sm font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                  class="cv-pi-button cv-pi-button--primary disabled:opacity-40 disabled:cursor-not-allowed">
             {{ saving ? t('common.saving') : t('characterEdit.saveCharacter') }}
           </button>
         </div>

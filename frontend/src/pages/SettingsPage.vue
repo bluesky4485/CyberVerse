@@ -89,7 +89,7 @@ async function test() {
     <AppHeader showBack :breadcrumb="[t('settings.breadcrumbs.list'), t('settings.breadcrumbs.settings')]" />
 
     <main class="max-w-[800px] mx-auto px-8 py-10">
-      <h1 class="text-xl font-semibold text-cv-text mb-1">{{ t('settings.title') }}</h1>
+      <h1 class="cv-display-title text-xl text-cv-text mb-1">{{ t('settings.title') }}</h1>
       <p class="text-[13px] text-cv-text-muted mb-8">{{ t('settings.subtitle') }}</p>
 
       <div class="flex flex-col gap-6">
@@ -192,11 +192,11 @@ async function test() {
             {{ testResult === 'success' ? t('settings.connectionSuccess') : t('settings.connectionFailed') }}
           </span>
           <button @click="test" :disabled="testing"
-                  class="px-5 py-2.5 border border-cv-border text-cv-text-secondary text-sm rounded-cv-md hover:bg-cv-hover hover:text-cv-text transition-all cursor-pointer disabled:opacity-40">
+                  class="cv-pi-button disabled:opacity-40">
             {{ testing ? t('settings.testing') : t('settings.testConnection') }}
           </button>
           <button @click="save" :disabled="saving"
-                  class="px-6 py-2.5 bg-cv-accent text-white text-sm font-medium rounded-cv-md hover:bg-cv-accent-hover transition-colors cursor-pointer disabled:opacity-40 shadow-[0_2px_8px_rgba(59,130,246,0.3)]">
+                  class="cv-pi-button cv-pi-button--primary disabled:opacity-40">
             {{ saving ? t('common.saving') : t('common.save') }}
           </button>
         </div>

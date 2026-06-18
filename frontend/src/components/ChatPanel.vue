@@ -201,7 +201,7 @@ onUnmounted(() => {
         :placeholder="t('chat.inputPlaceholder')"
         @keydown="handleKeydown"
       />
-      <button class="send-btn" @click="handleSend" :disabled="!inputText.trim()">
+      <button class="cv-pi-button cv-pi-button--primary cv-pi-button--compact" @click="handleSend" :disabled="!inputText.trim()">
         {{ t('chat.send') }}
       </button>
     </div>
@@ -360,17 +360,4 @@ onUnmounted(() => {
   border-color: #2563eb;
 }
 
-.send-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  background: #2563eb;
-  color: white;
-}
-.send-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 </style>
