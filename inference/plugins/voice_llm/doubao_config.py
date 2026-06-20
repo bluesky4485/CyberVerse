@@ -38,6 +38,25 @@ SC20_VOICES: dict[str, str] = {
 }
 
 
+def _format_dialog_context_for_manifest(dialog_context: list[dict]) -> str:
+    lines: list[str] = []
+    for item in dialog_context:
+        role = str(item.get("role", "")).strip().lower()
+        text = str(item.get("text", "")).strip()
+        if not text or role not in {"user", "assistant"}:
+            continue
+        label = "用户" if role == "user" else "助手"
+        lines.append(f"{label}：{text}")
+    if not lines:
+        return ""
+    return "\n".join(
+        [
+            "以下是最近的历史对话上下文。回答时必须保持连续性；当用户问起之前聊过什么、上次说过什么、是否记得时，必须依据这些内容回答，不要声称自己没有历史记忆：",
+            *lines,
+        ]
+    )
+
+
 @dataclass
 class DoubaoSessionConfig:
     """Configuration for Doubao realtime session."""
@@ -265,6 +284,9 @@ class DoubaoSessionConfig:
             parts.append(self.system_prompt)
         if self.speaking_style:
             parts.append(f"说话风格：{self.speaking_style}")
+        dialog_context = _format_dialog_context_for_manifest(self.dialog_context)
+        if dialog_context:
+            parts.append(dialog_context)
         return "\n".join(parts)
 
 

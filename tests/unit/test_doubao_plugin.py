@@ -798,6 +798,31 @@ class TestDoubaoSessionConfigOverrides:
             },
         ]
 
+    def test_dialog_context_is_included_in_character_manifest(self):
+        base = self._base_config()
+        session = VoiceLLMSessionConfig(
+            dialog_context=[
+                VoiceLLMDialogContextItem(
+                    role="user",
+                    text="我叫小明",
+                    timestamp=1777608000000,
+                ),
+                VoiceLLMDialogContextItem(
+                    role="assistant",
+                    text="我记住了，你叫小明。",
+                    timestamp=1777608001000,
+                ),
+            ],
+        )
+
+        result = base.with_overrides(session)
+        manifest = result.build_start_session_payload()["dialog"]["character_manifest"]
+
+        assert "以下是最近的历史对话上下文" in manifest
+        assert "用户：我叫小明" in manifest
+        assert "助手：我记住了，你叫小明。" in manifest
+        assert "不要声称自己没有历史记忆" in manifest
+
     def test_plugin_config_defaults_to_no_welcome_message(self):
         config = PluginConfig(
             plugin_name="omni.doubao",
