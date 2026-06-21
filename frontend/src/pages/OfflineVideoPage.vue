@@ -38,8 +38,14 @@ const submitting = ref(false)
 const renaming = ref(false)
 const editingJobId = ref('')
 const editingTitle = ref('')
+const highlightedJobId = ref('')
+const currentJobPage = ref(1)
+const failedReasonJob = ref<OfflineVideoJob | null>(null)
 const errorMessage = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+const JOBS_PER_PAGE = 8
 
 interface OfflineVideoSettings {
   inputType?: 'text' | 'audio'
@@ -85,6 +91,16 @@ const ttsLanguageOptions = [
 
 const isBaiduXilingCharacter = computed(() => store.current?.avatar_backend === 'baidu_xiling')
 const hasActiveJobs = computed(() => jobs.value.some(job => job.status === 'queued' || job.status === 'running'))
+const totalJobPages = computed(() => Math.max(1, Math.ceil(jobs.value.length / JOBS_PER_PAGE)))
+const pagedJobs = computed(() => {
+  const start = (currentJobPage.value - 1) * JOBS_PER_PAGE
+  return jobs.value.slice(start, start + JOBS_PER_PAGE)
+})
+const failedReasonText = computed(() =>
+  failedReasonJob.value?.error?.trim()
+    || failedReasonJob.value?.message?.trim()
+    || t('offlineVideo.failureReasonUnavailable'),
+)
 const characterCoverImage = computed(() => {
   const character = store.current
   if (!character) return ''
@@ -151,8 +167,12 @@ function stringSetting(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
+function clampProgress(job: OfflineVideoJob): number {
+  return Math.min(100, Math.max(0, job.progress || 0))
+}
+
 function progressStyle(job: OfflineVideoJob) {
-  return { width: `${Math.min(100, Math.max(0, job.progress || 0))}%` }
+  return { width: `${clampProgress(job)}%` }
 }
 
 function statusLabel(job: OfflineVideoJob): string {
@@ -170,17 +190,38 @@ function formatDate(value?: string): string {
   return date.toLocaleString()
 }
 
-function jobMeta(job: OfflineVideoJob): string {
-  if (job.width && job.height && job.fps) {
-    return `${job.width}x${job.height} · ${job.fps} FPS`
-  }
-  return job.message || t('offlineVideo.waiting')
-}
-
 async function refreshJobs() {
   if (!characterId.value) return
   const resp = await listOfflineVideos(characterId.value)
-  jobs.value = resp.videos
+  const existingById = new Map(jobs.value.map(job => [job.id, job]))
+  jobs.value = resp.videos.map(job => ({
+    ...(existingById.get(job.id) || {}),
+    ...job,
+  }))
+}
+
+function markJobHighlighted(jobId: string) {
+  highlightedJobId.value = jobId
+  const index = jobs.value.findIndex(job => job.id === jobId)
+  if (index >= 0) {
+    currentJobPage.value = Math.floor(index / JOBS_PER_PAGE) + 1
+  }
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => {
+    if (highlightedJobId.value === jobId) highlightedJobId.value = ''
+  }, 6000)
+}
+
+function changeJobPage(nextPage: number) {
+  currentJobPage.value = Math.min(totalJobPages.value, Math.max(1, nextPage))
+}
+
+function openFailedReason(job: OfflineVideoJob) {
+  failedReasonJob.value = job
+}
+
+function closeFailedReason() {
+  failedReasonJob.value = null
 }
 
 function handleAudioChange(event: Event) {
@@ -225,12 +266,18 @@ watch(
   saveOfflineVideoSettings,
 )
 
+watch(jobs, () => {
+  if (currentJobPage.value > totalJobPages.value) {
+    currentJobPage.value = totalJobPages.value
+  }
+})
+
 async function submitJob() {
   if (!canGenerate.value) return
   submitting.value = true
   errorMessage.value = ''
   try {
-    await createOfflineVideo(characterId.value, {
+    const createdJob = await createOfflineVideo(characterId.value, {
       inputType: inputType.value,
       text: scriptText.value.trim(),
       audio: audioFile.value,
@@ -249,6 +296,7 @@ async function submitJob() {
       scriptText.value = ''
     }
     await refreshJobs()
+    markJobHighlighted(createdJob.id)
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : t('offlineVideo.createFailed')
   } finally {
@@ -306,6 +354,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  if (highlightTimer) clearTimeout(highlightTimer)
 })
 </script>
 
@@ -496,79 +545,143 @@ onUnmounted(() => {
 
         <section class="jobs-section">
           <div class="jobs-header">
-            <h2>{{ t('offlineVideo.library') }}</h2>
-            <span>{{ t('offlineVideo.libraryCount', { count: jobs.length }) }}</span>
+            <div class="jobs-title-block">
+              <h2>{{ t('offlineVideo.library') }}</h2>
+              <p>{{ t('offlineVideo.libraryCount', { count: jobs.length }) }}</p>
+            </div>
           </div>
           <div v-if="jobs.length === 0" class="empty-jobs">{{ t('offlineVideo.empty') }}</div>
-          <div v-else class="jobs-list">
-            <article v-for="job in jobs" :key="job.id" class="job-row">
-              <div class="job-main">
-                <div class="job-title-row">
-                  <div class="job-title-left">
-                    <span v-if="isActiveJob(job)" class="job-spinner" aria-hidden="true" />
-                    <template v-if="editingJobId === job.id">
-                      <input
-                        v-model="editingTitle"
-                        class="rename-input"
-                        type="text"
-                        :placeholder="t('offlineVideo.titlePlaceholder')"
-                        @keydown.enter.prevent="submitRename(job)"
-                        @keydown.esc.prevent="cancelRename"
-                      >
-                      <button
-                        class="cv-pi-button cv-pi-button--primary cv-pi-button--compact"
-                        type="button"
-                        :disabled="renaming || !editingTitle.trim()"
-                        @click="submitRename(job)"
-                      >
-                        {{ t('common.save') }}
-                      </button>
-                      <button class="cv-pi-button cv-pi-button--compact" type="button" @click="cancelRename">
-                        {{ t('common.cancel') }}
-                      </button>
-                    </template>
-                    <template v-else>
-                      <h3>{{ job.title }}</h3>
-                      <button class="cv-pi-button cv-pi-button--compact" type="button" @click="startRename(job)">
-                        {{ t('offlineVideo.rename') }}
-                      </button>
-                    </template>
-                  </div>
-                  <span class="status-pill" :class="`status-${job.status}`">{{ statusLabel(job) }}</span>
+          <div v-else class="video-grid">
+            <article
+              v-for="job in pagedJobs"
+              :key="job.id"
+              class="video-card"
+              :class="{
+                'video-card--active': isActiveJob(job),
+                'video-card--highlight': highlightedJobId === job.id,
+              }"
+            >
+              <div class="video-preview" :class="`video-preview--${job.status}`">
+                <video
+                  v-if="job.status === 'completed' && job.video_url"
+                  :src="job.video_url"
+                  class="video-preview-media"
+                  muted
+                  playsinline
+                  preload="metadata"
+                />
+                <div v-else-if="isActiveJob(job)" class="video-preview-state">
+                  <span class="job-spinner" aria-hidden="true" />
+                  <span>{{ statusLabel(job) }}</span>
                 </div>
-                <p class="job-meta">{{ jobMeta(job) }}</p>
-                <div class="progress-track">
-                  <div class="progress-bar" :style="progressStyle(job)" />
+                <button
+                  v-else-if="job.status === 'failed'"
+                  class="video-preview-state video-preview-button"
+                  type="button"
+                  :aria-label="t('offlineVideo.viewFailureReason')"
+                  @click="openFailedReason(job)"
+                >
+                  <span class="video-preview-mark">!</span>
+                  <span>{{ t('offlineVideo.status.failed') }}</span>
+                </button>
+                <div v-else class="video-preview-state">
+                  <span class="video-preview-mark">▶</span>
+                  <span>{{ t('offlineVideo.status.completed') }}</span>
                 </div>
-                <p v-if="job.error" class="job-error">{{ job.error }}</p>
               </div>
-              <div class="job-side">
-                <span>{{ formatDate(job.created_at) }}</span>
-                <div class="job-actions">
-                  <a
-                    v-if="job.video_url"
-                    class="cv-pi-button cv-pi-button--primary cv-pi-button--compact"
-                    :href="job.video_url"
-                    target="_blank"
-                    rel="noreferrer"
+
+              <div class="video-card-body">
+                <template v-if="editingJobId === job.id">
+                  <input
+                    v-model="editingTitle"
+                    class="rename-input"
+                    type="text"
+                    :placeholder="t('offlineVideo.titlePlaceholder')"
+                    @keydown.enter.prevent="submitRename(job)"
+                    @keydown.esc.prevent="cancelRename"
                   >
-                    {{ t('offlineVideo.openVideo') }}
-                  </a>
-                  <button
-                    class="cv-pi-button cv-pi-button--compact"
-                    type="button"
-                    :disabled="job.status === 'queued' || job.status === 'running'"
-                    @click="removeJob(job)"
-                  >
-                    {{ t('common.delete') }}
+                  <div class="video-card-actions">
+                    <button
+                      class="cv-pi-button cv-pi-button--primary cv-pi-button--compact"
+                      type="button"
+                      :disabled="renaming || !editingTitle.trim()"
+                      @click="submitRename(job)"
+                    >
+                      {{ t('common.save') }}
+                    </button>
+                    <button class="cv-pi-button cv-pi-button--compact" type="button" @click="cancelRename">
+                      {{ t('common.cancel') }}
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <button class="video-title" type="button" :title="job.title" @click="startRename(job)">
+                    {{ job.title }}
                   </button>
-                </div>
+                  <p class="video-date">{{ formatDate(job.created_at) }}</p>
+                  <div v-if="isActiveJob(job)" class="video-progress">
+                    <div class="progress-track">
+                      <div class="progress-bar" :style="progressStyle(job)" />
+                    </div>
+                  </div>
+                  <div class="video-card-actions">
+                    <a
+                      v-if="job.video_url"
+                      class="cv-pi-button cv-pi-button--primary cv-pi-button--compact"
+                      :href="job.video_url"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {{ t('offlineVideo.openVideo') }}
+                    </a>
+                    <button
+                      class="cv-pi-button cv-pi-button--compact"
+                      type="button"
+                      :disabled="job.status === 'queued' || job.status === 'running'"
+                      @click="removeJob(job)"
+                    >
+                      {{ t('common.delete') }}
+                    </button>
+                  </div>
+                </template>
               </div>
             </article>
+          </div>
+          <div v-if="jobs.length > JOBS_PER_PAGE" class="video-pagination">
+            <span>{{ t('offlineVideo.pagination', { page: currentJobPage, total: totalJobPages }) }}</span>
+            <div class="video-pagination-actions">
+              <button
+                class="cv-pi-button cv-pi-button--compact"
+                type="button"
+                :disabled="currentJobPage <= 1"
+                @click="changeJobPage(currentJobPage - 1)"
+              >
+                {{ t('offlineVideo.previousPage') }}
+              </button>
+              <button
+                class="cv-pi-button cv-pi-button--compact"
+                type="button"
+                :disabled="currentJobPage >= totalJobPages"
+                @click="changeJobPage(currentJobPage + 1)"
+              >
+                {{ t('offlineVideo.nextPage') }}
+              </button>
+            </div>
           </div>
         </section>
       </template>
     </main>
+
+    <div v-if="failedReasonJob" class="failure-modal-backdrop" @click.self="closeFailedReason">
+      <section class="failure-modal" role="dialog" aria-modal="true" :aria-label="t('offlineVideo.failureReason')">
+        <div class="failure-modal-header">
+          <button class="failure-modal-close" type="button" :aria-label="t('offlineVideo.closeFailureReason')" @click="closeFailedReason">
+            ×
+          </button>
+        </div>
+        <pre class="failure-modal-message">{{ failedReasonText }}</pre>
+      </section>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -809,8 +922,8 @@ onUnmounted(() => {
 }
 
 .jobs-header,
-.job-title-row,
-.job-actions {
+.video-card-actions,
+.video-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -822,7 +935,11 @@ onUnmounted(() => {
 }
 
 .jobs-header {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.jobs-title-block {
+  min-width: 0;
 }
 
 .jobs-header h2 {
@@ -831,8 +948,8 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.jobs-header span,
-.job-side {
+.jobs-title-block p {
+  margin-top: 6px;
   color: #798394;
   font-size: 12px;
 }
@@ -844,41 +961,98 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.jobs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.job-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 230px;
-  gap: 18px;
+.video-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   border: 1px solid #242b36;
   background: #0b0d12;
-  padding: 16px;
+  padding: 12px;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.job-main {
-  min-width: 0;
+.video-card--active {
+  border-color: rgba(52, 230, 243, 0.42);
 }
 
-.job-title-row h3 {
-  min-width: 0;
+.video-card--highlight {
+  border-color: rgba(52, 230, 243, 0.76);
+  background: rgba(52, 230, 243, 0.035);
+  box-shadow: 0 0 0 1px rgba(52, 230, 243, 0.18), 0 0 24px rgba(52, 230, 243, 0.08);
+}
+
+.video-preview {
+  position: relative;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
-  color: #f4f7fb;
-  font-size: 15px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: 1px solid #242b36;
+  background: #07080b;
 }
 
-.job-title-left {
+.video-preview-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-preview-state {
   display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
+  color: #8d96a6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.video-preview-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.video-preview-button:hover,
+.video-preview-button:focus-visible {
+  background: rgba(239, 68, 68, 0.08);
+  color: #f3b5b5;
+}
+
+.video-preview--queued,
+.video-preview--running {
+  background:
+    linear-gradient(135deg, rgba(52, 230, 243, 0.1), transparent 42%),
+    repeating-linear-gradient(135deg, rgba(52, 230, 243, 0.06) 0 1px, transparent 1px 11px),
+    #07080b;
+}
+
+.video-preview--failed {
+  border-color: #303a49;
+  background:
+    linear-gradient(135deg, rgba(255, 179, 107, 0.06), transparent 42%),
+    #07080b;
+}
+
+.video-preview-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #303a49;
+  color: #f4f7fb;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .job-spinner {
@@ -893,8 +1067,8 @@ onUnmounted(() => {
 
 .rename-input {
   min-width: 0;
-  flex: 1 1 auto;
   height: 36px;
+  width: 100%;
   border: 1px solid #303a49;
   background: #07080b;
   color: #f4f7fb;
@@ -913,39 +1087,43 @@ onUnmounted(() => {
   }
 }
 
-.status-pill {
-  flex: 0 0 auto;
-  border: 1px solid #303a49;
-  padding: 3px 10px;
-  color: #9da6b5;
-  font-size: 12px;
+.video-card-body {
+  display: flex;
+  min-width: 0;
+  min-height: 128px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding-top: 12px;
 }
 
-.status-completed {
-  border-color: rgba(34, 197, 94, 0.45);
-  color: #86efac;
+.video-title {
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 160ms ease;
 }
 
-.status-failed {
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #fca5a5;
+.video-title:hover {
+  color: #34e6f3;
 }
 
-.status-running,
-.status-queued {
-  border-color: rgba(52, 230, 243, 0.45);
-  color: #8fe8ef;
+.video-date {
+  margin-top: 4px;
+  color: #798394;
+  font-size: 11px;
 }
 
-.job-meta {
-  margin-top: 7px;
-  color: #8d96a6;
-  font-size: 13px;
+.video-progress {
+  margin-top: 10px;
 }
 
 .progress-track {
-  margin-top: 12px;
-  height: 6px;
+  height: 5px;
   overflow: hidden;
   background: #1b222c;
 }
@@ -956,17 +1134,82 @@ onUnmounted(() => {
   transition: width 200ms ease;
 }
 
-.job-error {
-  margin-top: 8px;
+.video-card-actions {
+  margin-top: auto;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.video-pagination {
+  margin-top: 18px;
+  border-top: 1px solid #242b36;
+  padding-top: 16px;
+  color: #798394;
   font-size: 12px;
 }
 
-.job-side {
+.video-pagination-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+}
+
+.failure-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.68);
+  padding: 24px;
+}
+
+.failure-modal {
+  position: relative;
+  width: min(560px, 100%);
+  border: 1px solid #303a49;
+  background: #11141b;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  padding: 24px 54px 24px 24px;
+}
+
+.failure-modal-header {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.failure-modal-close {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  color: #c4ccd8;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.failure-modal-close:hover {
+  border-color: #303a49;
+  color: #34e6f3;
+}
+
+.failure-modal-message {
+  max-height: 260px;
+  margin-top: 0;
+  overflow: auto;
+  color: #d7dde8;
+  padding: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 860px) {
@@ -974,12 +1217,30 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .job-row {
+  .jobs-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .video-grid {
     grid-template-columns: 1fr;
   }
 
-  .job-side {
+  .video-pagination {
     align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  .video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) and (min-width: 681px) {
+  .video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
