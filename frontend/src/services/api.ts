@@ -159,6 +159,8 @@ export interface CreateOfflineVideoInput {
   text?: string
   audio?: File | null
   inputAudioUrl?: string
+  ttsProvider?: string
+  ttsVoice?: string
   width?: number
   height?: number
   transparent?: boolean
@@ -181,6 +183,8 @@ export async function createOfflineVideo(characterId: string, input: CreateOffli
   if (input.text) form.append('text', input.text)
   if (input.audio) form.append('audio', input.audio)
   if (input.inputAudioUrl) form.append('input_audio_url', input.inputAudioUrl)
+  if (input.ttsProvider) form.append('tts_provider', input.ttsProvider)
+  if (input.ttsVoice) form.append('tts_voice', input.ttsVoice)
   if (input.width) form.append('width', String(input.width))
   if (input.height) form.append('height', String(input.height))
   if (typeof input.transparent === 'boolean') form.append('transparent', String(input.transparent))
@@ -261,6 +265,16 @@ export async function createCharacter(data: CharacterForm): Promise<Character> {
 
 export async function updateCharacter(id: string, data: CharacterForm): Promise<Character> {
   return request(`/characters/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateOfflineVideoTTS(
+  id: string,
+  data: { provider: string; voice: string },
+): Promise<Character> {
+  return request(`/characters/${id}/offline-video-tts`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })

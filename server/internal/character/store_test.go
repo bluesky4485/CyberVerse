@@ -156,6 +156,42 @@ func TestBaiduXilingAvatarFieldsPersistAcrossStoreReload(t *testing.T) {
 	}
 }
 
+func TestOfflineVideoTTSPersistAcrossStoreReload(t *testing.T) {
+	baseDir := t.TempDir()
+	store, err := NewStore(baseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := store.Create(&Character{
+		Name:          "Offline TTS",
+		VoiceProvider: "qwen_omni",
+		VoiceType:     "Tina",
+		OfflineVideoTTS: &OfflineVideoTTS{
+			Provider: " qwen ",
+			Voice:    " Momo ",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := NewStore(baseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := reloaded.Get(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OfflineVideoTTS == nil {
+		t.Fatal("expected offline_video_tts config")
+	}
+	if got.OfflineVideoTTS.Provider != "qwen" || got.OfflineVideoTTS.Voice != "Momo" {
+		t.Fatalf("expected trimmed offline_video_tts qwen/Momo, got %#v", got.OfflineVideoTTS)
+	}
+}
+
 func TestActivateImageMovesImageFirstAndUpdatesAvatarCover(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {

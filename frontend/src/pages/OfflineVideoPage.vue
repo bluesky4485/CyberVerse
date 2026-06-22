@@ -3,11 +3,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppHeader from '../components/AppHeader.vue'
+import CvSelect from '../components/CvSelect.vue'
 import { useCharacterStore } from '../stores/characters'
-import { createOfflineVideo, deleteOfflineVideo, listOfflineVideos, renameOfflineVideo } from '../services/api'
-import type { OfflineVideoJob } from '../types'
+import { createOfflineVideo, deleteOfflineVideo, getComponents, listOfflineVideos, renameOfflineVideo, updateOfflineVideoTTS } from '../services/api'
+import { OPENAI_VOICE_OPTIONS, QWEN_TTS_VOICE_OPTIONS } from '../types'
+import type { ComponentOption, ComponentsResponse, OfflineVideoJob } from '../types'
 import { saveLaunchWorkspaceMode } from '../utils/launchModePreference'
-import { formatVoiceTypeDisplay } from '../utils/voice'
+import { DEFAULT_QWEN_TTS_VOICE, formatVoiceTypeDisplay, isOpenAIVoiceType, isQwenTTSVoiceType, localizedVoiceOptions } from '../utils/voice'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +33,10 @@ const ttsLan = ref('auto')
 const ttsSpeed = ref(5)
 const ttsVolume = ref(5)
 const ttsPitch = ref(5)
+const offlineTTSProvider = ref('qwen')
+const offlineTTSVoice = ref(DEFAULT_QWEN_TTS_VOICE)
+const offlineTTSSaveError = ref('')
+const savingOfflineTTS = ref(false)
 const backgroundImageUrl = ref('')
 const autoAnimoji = ref(false)
 const jobs = ref<OfflineVideoJob[]>([])
@@ -45,9 +51,17 @@ const failedReasonJob = ref<OfflineVideoJob | null>(null)
 const errorMessage = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
+let offlineTTSSaveTimer: ReturnType<typeof setTimeout> | null = null
+let hydratingOfflineTTS = false
 
 const JOBS_PER_PAGE = 8
 const BAIDU_XILING_COMMON_ASSETS_URL = 'https://xiling.cloud.baidu.com/open/commonAssets/list'
+const DEFAULT_COMPONENTS: ComponentsResponse = {
+  llm: [{ id: 'qwen', name: 'Qwen', model: 'qwen3.6-plus', default: true, available: true }],
+  asr: [{ id: 'qwen', name: 'Qwen', model: 'qwen3-asr-flash-realtime', default: true, available: true }],
+  tts: [{ id: 'qwen', name: 'Qwen', model: 'qwen3-tts-flash-realtime', default: true, available: true }],
+}
+const componentCatalog = ref<ComponentsResponse>({ ...DEFAULT_COMPONENTS })
 
 interface OfflineVideoSettings {
   inputType?: 'text' | 'audio'
@@ -92,7 +106,14 @@ const ttsLanguageOptions = [
   'Hindi',
 ]
 
+const providerSelectOptions = (items: ComponentOption[]) =>
+  items.map(item => ({
+    label: item.name,
+    value: item.id,
+  }))
+
 const isBaiduXilingCharacter = computed(() => store.current?.avatar_backend === 'baidu_xiling')
+const showLocalTextTTSSettings = computed(() => !isBaiduXilingCharacter.value && inputType.value === 'text')
 const hasActiveJobs = computed(() => jobs.value.some(job => job.status === 'queued' || job.status === 'running'))
 const totalJobPages = computed(() => Math.max(1, Math.ceil(jobs.value.length / JOBS_PER_PAGE)))
 const pagedJobs = computed(() => {
@@ -115,6 +136,17 @@ const characterCoverImage = computed(() => {
 const audioHint = computed(() =>
   isBaiduXilingCharacter.value ? t('offlineVideo.baiduAudioHint') : t('offlineVideo.audioHint'),
 )
+const ttsProviderOptions = computed(() => providerSelectOptions(componentCatalog.value.tts))
+const selectedOfflineTTSComponent = computed(() =>
+  componentCatalog.value.tts.find(item => item.id === offlineTTSProvider.value),
+)
+const offlineTTSModel = computed(() => selectedOfflineTTSComponent.value?.model || '')
+const offlineTTSVoiceOptions = computed(() => {
+  if (offlineTTSProvider.value === 'openai') {
+    return localizedVoiceOptions(OPENAI_VOICE_OPTIONS, locale.value)
+  }
+  return localizedVoiceOptions(QWEN_TTS_VOICE_OPTIONS, locale.value)
+})
 const audioAccept = '.wav,.pcm,.s16le,audio/*'
 const isTTSPersonRequired = computed(() => isBaiduXilingCharacter.value && inputType.value === 'text')
 const isMissingTTSPerson = computed(() => isTTSPersonRequired.value && !ttsPerson.value.trim())
@@ -175,6 +207,69 @@ function boolSetting(value: unknown, fallback: boolean): boolean {
 
 function stringSetting(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
+}
+
+function defaultOfflineTTSProvider(): string {
+  return componentCatalog.value.tts.find(item => item.default)?.id
+    || componentCatalog.value.tts[0]?.id
+    || 'qwen'
+}
+
+function defaultOfflineTTSVoice(provider: string): string {
+  return provider === 'openai' ? 'nova' : DEFAULT_QWEN_TTS_VOICE
+}
+
+function isOfflineTTSVoiceValid(provider: string, voice: string): boolean {
+  if (!voice.trim()) return false
+  if (provider === 'openai') return isOpenAIVoiceType(voice)
+  if (provider === 'qwen') return isQwenTTSVoiceType(voice)
+  return true
+}
+
+function normalizeOfflineTTSVoice(provider: string, voice: string): string {
+  const trimmed = voice.trim()
+  return isOfflineTTSVoiceValid(provider, trimmed) ? trimmed : defaultOfflineTTSVoice(provider)
+}
+
+function loadOfflineTTSPreference() {
+  hydratingOfflineTTS = true
+  try {
+    const preference = store.current?.offline_video_tts
+    const requestedProvider = preference?.provider || defaultOfflineTTSProvider()
+    const provider = componentCatalog.value.tts.some(item => item.id === requestedProvider)
+      ? requestedProvider
+      : defaultOfflineTTSProvider()
+    offlineTTSProvider.value = provider
+    offlineTTSVoice.value = normalizeOfflineTTSVoice(provider, preference?.voice || '')
+    offlineTTSSaveError.value = ''
+  } finally {
+    hydratingOfflineTTS = false
+  }
+}
+
+function scheduleOfflineTTSSave() {
+  if (hydratingOfflineTTS || isBaiduXilingCharacter.value) return
+  if (offlineTTSSaveTimer) clearTimeout(offlineTTSSaveTimer)
+  offlineTTSSaveTimer = setTimeout(() => {
+    saveOfflineTTSPreference().catch(() => {})
+  }, 500)
+}
+
+async function saveOfflineTTSPreference() {
+  if (isBaiduXilingCharacter.value || !characterId.value || !offlineTTSProvider.value) return
+  savingOfflineTTS.value = true
+  offlineTTSSaveError.value = ''
+  try {
+    const updated = await updateOfflineVideoTTS(characterId.value, {
+      provider: offlineTTSProvider.value,
+      voice: offlineTTSVoice.value,
+    })
+    store.current = updated
+  } catch (err) {
+    offlineTTSSaveError.value = err instanceof Error ? err.message : t('offlineVideo.ttsPreferenceSaveFailed')
+  } finally {
+    savingOfflineTTS.value = false
+  }
 }
 
 function clampProgress(job: OfflineVideoJob): number {
@@ -278,6 +373,22 @@ watch(
   saveOfflineVideoSettings,
 )
 
+watch(
+  () => offlineTTSProvider.value,
+  (provider) => {
+    if (hydratingOfflineTTS) return
+    offlineTTSVoice.value = defaultOfflineTTSVoice(provider)
+    scheduleOfflineTTSSave()
+  },
+)
+
+watch(
+  () => offlineTTSVoice.value,
+  () => {
+    scheduleOfflineTTSSave()
+  },
+)
+
 watch(jobs, () => {
   if (currentJobPage.value > totalJobPages.value) {
     currentJobPage.value = totalJobPages.value
@@ -294,6 +405,8 @@ async function submitJob() {
       text: scriptText.value.trim(),
       audio: isBaiduXilingCharacter.value ? null : audioFile.value,
       inputAudioUrl: isBaiduXilingCharacter.value ? inputAudioUrl.value.trim() : '',
+      ttsProvider: showLocalTextTTSSettings.value ? offlineTTSProvider.value : '',
+      ttsVoice: showLocalTextTTSSettings.value ? offlineTTSVoice.value : '',
       width: outputWidth.value,
       height: outputHeight.value,
       transparent: transparentBackground.value,
@@ -352,8 +465,14 @@ async function removeJob(job: OfflineVideoJob) {
 
 onMounted(async () => {
   saveLaunchWorkspaceMode('offline')
+  try {
+    componentCatalog.value = await getComponents()
+  } catch (err) {
+    console.warn('Failed to load components:', err)
+  }
   await store.fetchOne(characterId.value).catch(() => {})
   loadOutputSettings()
+  loadOfflineTTSPreference()
   await refreshJobs().catch((err) => {
     errorMessage.value = err instanceof Error ? err.message : t('offlineVideo.loadFailed')
   })
@@ -368,6 +487,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (highlightTimer) clearTimeout(highlightTimer)
+  if (offlineTTSSaveTimer) clearTimeout(offlineTTSSaveTimer)
 })
 </script>
 
@@ -457,6 +577,35 @@ onUnmounted(() => {
                   class="script-input"
                   :placeholder="t('offlineVideo.scriptPlaceholder')"
                 />
+                <section v-if="showLocalTextTTSSettings" class="local-tts-settings">
+                  <div class="local-tts-grid">
+                    <span class="local-tts-label">TTS</span>
+                    <label class="settings-field">
+                      <span>{{ t('common.provider') }}</span>
+                      <CvSelect
+                        v-model="offlineTTSProvider"
+                        :options="ttsProviderOptions"
+                      />
+                    </label>
+                    <label class="settings-field">
+                      <span>{{ t('common.model') }}</span>
+                      <input
+                        class="number-input readonly-input"
+                        type="text"
+                        :value="offlineTTSModel"
+                        readonly
+                      >
+                    </label>
+                    <label class="settings-field">
+                      <span>{{ t('common.voice') }}</span>
+                      <CvSelect
+                        v-model="offlineTTSVoice"
+                        :options="offlineTTSVoiceOptions"
+                      />
+                    </label>
+                  </div>
+                  <p v-if="offlineTTSSaveError" class="field-error">{{ offlineTTSSaveError }}</p>
+                </section>
               </template>
 
               <template v-else-if="isBaiduXilingCharacter">
@@ -886,6 +1035,24 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.local-tts-settings {
+  margin-top: -2px;
+}
+
+.local-tts-grid {
+  display: grid;
+  align-items: start;
+  gap: 12px;
+  grid-template-columns: 70px repeat(3, minmax(0, 1fr));
+}
+
+.local-tts-label {
+  padding-top: 31px;
+  color: #a8b1c0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .settings-section {
   border-top: 1px solid #242b36;
   padding-top: 14px;
@@ -999,6 +1166,17 @@ onUnmounted(() => {
 
 .number-input:focus {
   border-color: #34e6f3;
+}
+
+.readonly-input {
+  cursor: default;
+  color: #d7dde8;
+}
+
+.field-error {
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .toggle-field {
@@ -1334,6 +1512,14 @@ onUnmounted(() => {
 @media (max-width: 860px) {
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .local-tts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .local-tts-label {
+    padding-top: 0;
   }
 
   .jobs-header {

@@ -165,6 +165,11 @@ func (r *Router) handleCreateOfflineVideo(w http.ResponseWriter, req *http.Reque
 		return
 	}
 	jobID := uuid.NewString()
+	ttsConfig, err := r.offlineVideoTTSConfig(req, ch, inputType, "offline-"+jobID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
 	jobDir := filepath.Join(root, jobID)
 	if err := os.MkdirAll(jobDir, 0755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
@@ -211,13 +216,8 @@ func (r *Router) handleCreateOfflineVideo(w http.ResponseWriter, req *http.Reque
 		ImageFormat: imageFormat,
 		Text:        text,
 		Audio:       audio,
-		TTSConfig: inference.TTSConfig{
-			Provider:      ch.Components.TTS,
-			Voice:         ch.VoiceType,
-			SpeakingStyle: ch.SpeakingStyle,
-			SessionID:     "offline-" + jobID,
-		},
-		OutputPath: filepath.Join(jobDir, "output.mp4"),
+		TTSConfig:   ttsConfig,
+		OutputPath:  filepath.Join(jobDir, "output.mp4"),
 	}
 	go r.runOfflineVideoJob(runInput)
 
@@ -586,6 +586,34 @@ func (r *Router) offlineVideoAvatarImage(ch *character.Character) ([]byte, strin
 		format = "png"
 	}
 	return data, format, nil
+}
+
+func (r *Router) offlineVideoTTSConfig(req *http.Request, ch *character.Character, inputType string, sessionID string) (inference.TTSConfig, error) {
+	if inputType != "text" {
+		return inference.TTSConfig{SessionID: sessionID}, nil
+	}
+	provider := ""
+	voice := ""
+	provider = strings.TrimSpace(req.FormValue("tts_provider"))
+	voice = strings.TrimSpace(req.FormValue("tts_voice"))
+	if provider == "" && voice == "" && ch != nil && ch.OfflineVideoTTS != nil {
+		provider = strings.TrimSpace(ch.OfflineVideoTTS.Provider)
+		voice = strings.TrimSpace(ch.OfflineVideoTTS.Voice)
+	}
+	if provider == "" {
+		provider = r.pipelineDefault("tts")
+	}
+	if !r.configuredTTSProvider(provider) {
+		return inference.TTSConfig{}, fmt.Errorf("unsupported tts provider: %s", provider)
+	}
+	if voice == "" {
+		voice = r.configuredTTSVoice(provider)
+	}
+	return inference.TTSConfig{
+		Provider:  provider,
+		Voice:     voice,
+		SessionID: sessionID,
+	}, nil
 }
 
 func baiduXilingOfflineTemplateID() string {

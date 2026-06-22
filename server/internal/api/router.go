@@ -82,6 +82,7 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("POST /api/v1/characters/test-voice", r.handleTestCharacterVoice)
 	r.mux.HandleFunc("GET /api/v1/characters/{id}", r.handleGetCharacter)
 	r.mux.HandleFunc("PUT /api/v1/characters/{id}", r.handleUpdateCharacter)
+	r.mux.HandleFunc("PUT /api/v1/characters/{id}/offline-video-tts", r.handleUpdateCharacterOfflineVideoTTS)
 	r.mux.HandleFunc("DELETE /api/v1/characters/{id}", r.handleDeleteCharacter)
 	r.mux.HandleFunc("POST /api/v1/characters/{id}/avatar", r.handleUploadAvatar)
 	r.mux.HandleFunc("GET /api/v1/characters/{id}/images", r.handleListImages)

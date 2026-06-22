@@ -29,6 +29,11 @@ type testCharacterVoiceRequest struct {
 	VoiceType     string `json:"voice_type"`
 }
 
+type updateOfflineVideoTTSRequest struct {
+	Provider string `json:"provider"`
+	Voice    string `json:"voice"`
+}
+
 type idleVideoTarget struct {
 	width  int
 	height int
@@ -235,6 +240,33 @@ func (r *Router) handleUpdateCharacter(w http.ResponseWriter, req *http.Request)
 	}
 
 	updated, err := r.charStore.Update(id, &c)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, r.buildCharacterResponse(updated, r.currentIdleVideoTarget(req.Context())))
+}
+
+func (r *Router) handleUpdateCharacterOfflineVideoTTS(w http.ResponseWriter, req *http.Request) {
+	id := req.PathValue("id")
+	var body updateOfflineVideoTTSRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid JSON: " + err.Error()})
+		return
+	}
+	provider := strings.TrimSpace(body.Provider)
+	if provider == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "provider is required"})
+		return
+	}
+	if !r.configuredTTSProvider(provider) {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "unsupported tts provider: " + provider})
+		return
+	}
+	updated, err := r.charStore.UpdateOfflineVideoTTS(id, &character.OfflineVideoTTS{
+		Provider: provider,
+		Voice:    strings.TrimSpace(body.Voice),
+	})
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return

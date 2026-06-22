@@ -25,33 +25,39 @@ type ImageInfo struct {
 }
 
 type Character struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	Description    string       `json:"description"`
-	AvatarImage    string       `json:"avatar_image"`
-	AvatarBackend  string       `json:"avatar_backend"`
-	BaiduXiling    *BaiduXiling `json:"baidu_xiling,omitempty"`
-	UseFaceCrop    bool         `json:"use_face_crop"`
-	Mode           string       `json:"mode"`
-	VoiceProvider  string       `json:"voice_provider"`
-	VoiceType      string       `json:"voice_type"`
-	Components     Components   `json:"components"`
-	SpeakingStyle  string       `json:"speaking_style"`
-	Personality    string       `json:"personality"`
-	WelcomeMessage string       `json:"welcome_message"`
-	SystemPrompt   string       `json:"system_prompt"`
-	Tags           []string     `json:"tags"`
-	Images         []ImageInfo  `json:"images"`
-	ActiveImage    string       `json:"active_image"`
-	ImageMode      string       `json:"image_mode"`
-	CreatedAt      string       `json:"created_at"`
-	UpdatedAt      string       `json:"updated_at"`
+	ID              string           `json:"id"`
+	Name            string           `json:"name"`
+	Description     string           `json:"description"`
+	AvatarImage     string           `json:"avatar_image"`
+	AvatarBackend   string           `json:"avatar_backend"`
+	BaiduXiling     *BaiduXiling     `json:"baidu_xiling,omitempty"`
+	OfflineVideoTTS *OfflineVideoTTS `json:"offline_video_tts,omitempty"`
+	UseFaceCrop     bool             `json:"use_face_crop"`
+	Mode            string           `json:"mode"`
+	VoiceProvider   string           `json:"voice_provider"`
+	VoiceType       string           `json:"voice_type"`
+	Components      Components       `json:"components"`
+	SpeakingStyle   string           `json:"speaking_style"`
+	Personality     string           `json:"personality"`
+	WelcomeMessage  string           `json:"welcome_message"`
+	SystemPrompt    string           `json:"system_prompt"`
+	Tags            []string         `json:"tags"`
+	Images          []ImageInfo      `json:"images"`
+	ActiveImage     string           `json:"active_image"`
+	ImageMode       string           `json:"image_mode"`
+	CreatedAt       string           `json:"created_at"`
+	UpdatedAt       string           `json:"updated_at"`
 }
 
 type Components struct {
 	LLM string `json:"llm"`
 	ASR string `json:"asr"`
 	TTS string `json:"tts"`
+}
+
+type OfflineVideoTTS struct {
+	Provider string `json:"provider"`
+	Voice    string `json:"voice"`
 }
 
 type BaiduXiling struct {
@@ -140,6 +146,19 @@ func normalizeBaiduXilingConfig(cfg *BaiduXiling) *BaiduXiling {
 	return &out
 }
 
+func NormalizeOfflineVideoTTS(cfg *OfflineVideoTTS) *OfflineVideoTTS {
+	if cfg == nil {
+		return nil
+	}
+	out := *cfg
+	out.Provider = strings.TrimSpace(out.Provider)
+	out.Voice = strings.TrimSpace(out.Voice)
+	if out.Provider == "" && out.Voice == "" {
+		return nil
+	}
+	return &out
+}
+
 func normalizeAvatarFields(c *Character, fallback *Character) {
 	c.AvatarBackend = normalizeAvatarBackend(c.AvatarBackend)
 	if c.AvatarBackend == AvatarBackendBaiduXiling {
@@ -219,6 +238,7 @@ func (s *Store) Create(c *Character) (*Character, error) {
 	}
 	c.Mode = normalizeMode(c.Mode, "standard")
 	c.Components = NormalizeComponents(c.Components, DefaultComponents())
+	c.OfflineVideoTTS = NormalizeOfflineVideoTTS(c.OfflineVideoTTS)
 	normalizeAvatarFields(c, nil)
 	if c.VoiceProvider == "" {
 		c.VoiceProvider = c.Components.TTS
@@ -278,6 +298,11 @@ func (s *Store) Update(id string, c *Character) (*Character, error) {
 		c.ImageMode = existing.ImageMode
 	}
 	normalizeAvatarFields(c, existing)
+	if c.OfflineVideoTTS == nil {
+		c.OfflineVideoTTS = NormalizeOfflineVideoTTS(existing.OfflineVideoTTS)
+	} else {
+		c.OfflineVideoTTS = NormalizeOfflineVideoTTS(c.OfflineVideoTTS)
+	}
 	c.Mode = normalizeMode(c.Mode, normalizeMode(existing.Mode, "standard"))
 	c.Components = NormalizeComponents(c.Components, existing.Components)
 	if c.VoiceProvider == "" {
@@ -304,6 +329,22 @@ func (s *Store) Update(id string, c *Character) (*Character, error) {
 	}
 
 	s.chars[id] = c
+	if err := s.saveOne(c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (s *Store) UpdateOfflineVideoTTS(id string, cfg *OfflineVideoTTS) (*Character, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	c, ok := s.chars[id]
+	if !ok {
+		return nil, fmt.Errorf("character not found: %s", id)
+	}
+	c.OfflineVideoTTS = NormalizeOfflineVideoTTS(cfg)
+	c.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveOne(c); err != nil {
 		return nil, err
 	}
@@ -693,6 +734,7 @@ func (s *Store) load() error {
 			c.ImageMode = "fixed"
 		}
 		normalizeAvatarFields(&c, nil)
+		c.OfflineVideoTTS = NormalizeOfflineVideoTTS(c.OfflineVideoTTS)
 		// Legacy character.json files had no mode field; default to omni (prior voice_llm behavior).
 		c.Mode = normalizeMode(c.Mode, "omni")
 		c.Components = NormalizeComponents(c.Components, DefaultComponents())

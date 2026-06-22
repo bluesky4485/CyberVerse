@@ -161,6 +161,72 @@ func TestCharacterVoiceTypeAllowsCustomSpeakerID(t *testing.T) {
 	}
 }
 
+func TestUpdateCharacterOfflineVideoTTS(t *testing.T) {
+	r := newTestRouter()
+	char, err := r.charStore.Create(&character.Character{
+		Name:          "Offline TTS",
+		VoiceProvider: "qwen_omni",
+		VoiceType:     "Tina",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/characters/"+char.ID+"/offline-video-tts",
+		strings.NewReader(`{"provider":"qwen","voice":"Momo"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	offlineTTS, ok := resp["offline_video_tts"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected offline_video_tts in response, got %#v", resp["offline_video_tts"])
+	}
+	if offlineTTS["provider"] != "qwen" || offlineTTS["voice"] != "Momo" {
+		t.Fatalf("unexpected offline_video_tts: %#v", offlineTTS)
+	}
+
+	updated, err := r.charStore.Get(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.OfflineVideoTTS == nil || updated.OfflineVideoTTS.Provider != "qwen" || updated.OfflineVideoTTS.Voice != "Momo" {
+		t.Fatalf("expected stored offline tts qwen/Momo, got %#v", updated.OfflineVideoTTS)
+	}
+}
+
+func TestUpdateCharacterOfflineVideoTTSRejectsUnconfiguredProvider(t *testing.T) {
+	r := newTestRouter()
+	char, err := r.charStore.Create(&character.Character{Name: "Offline TTS"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/characters/"+char.ID+"/offline-video-tts",
+		strings.NewReader(`{"provider":"openai","voice":"nova"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestTestCharacterVoiceSuccess(t *testing.T) {
 	inf := &fakeInferenceService{
 		avatarInfo:        &pb.AvatarInfo{ModelName: "avatar.flash_head", OutputFps: 25, OutputWidth: 512, OutputHeight: 512},

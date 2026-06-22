@@ -24,21 +24,25 @@ type componentsResponse struct {
 }
 
 func (r *Router) handleListComponents(w http.ResponseWriter, req *http.Request) {
-	if r.configPath == "" {
-		writeJSON(w, http.StatusOK, r.defaultComponentsResponse())
-		return
-	}
-
-	doc, err := config.ReadYAMLNode(r.configPath)
+	llm, err := r.configuredComponentOptions("llm")
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
-
+	asr, err := r.configuredComponentOptions("asr")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	tts, err := r.configuredComponentOptions("tts")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, componentsResponse{
-		LLM: r.componentOptions(doc, "llm", r.pipelineDefault("llm")),
-		ASR: r.componentOptions(doc, "asr", r.pipelineDefault("asr")),
-		TTS: r.componentOptions(doc, "tts", r.pipelineDefault("tts")),
+		LLM: llm,
+		ASR: asr,
+		TTS: tts,
 	})
 }
 
@@ -68,6 +72,71 @@ func (r *Router) pipelineDefault(category string) string {
 		}
 	}
 	return "qwen"
+}
+
+func (r *Router) configuredComponentOptions(category string) ([]componentOption, error) {
+	if r.configPath == "" {
+		switch category {
+		case "llm":
+			return r.defaultComponentsResponse().LLM, nil
+		case "asr":
+			return r.defaultComponentsResponse().ASR, nil
+		case "tts":
+			return r.defaultComponentsResponse().TTS, nil
+		default:
+			return nil, nil
+		}
+	}
+	doc, err := config.ReadYAMLNode(r.configPath)
+	if err != nil {
+		return nil, err
+	}
+	return r.componentOptions(doc, category, r.pipelineDefault(category)), nil
+}
+
+func (r *Router) configuredTTSProvider(provider string) bool {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return false
+	}
+	options, err := r.configuredComponentOptions("tts")
+	if err != nil {
+		return false
+	}
+	for _, opt := range options {
+		if opt.ID == provider && opt.Available {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Router) configuredTTSVoice(provider string) string {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = r.pipelineDefault("tts")
+	}
+	if r.configPath != "" {
+		if doc, err := config.ReadYAMLNode(r.configPath); err == nil {
+			if section, err := config.GetNodeAtPath(doc, "inference.tts."+provider); err == nil {
+				if voice := scalarAt(section, "voice"); voice != "" {
+					return voice
+				}
+			}
+		}
+	}
+	return defaultTTSVoice(provider)
+}
+
+func defaultTTSVoice(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "qwen":
+		return "Momo"
+	case "openai":
+		return "nova"
+	default:
+		return ""
+	}
 }
 
 func (r *Router) componentOptions(doc *yaml.Node, category string, fallbackDefault string) []componentOption {

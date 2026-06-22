@@ -49,6 +49,7 @@ type fakeInferenceService struct {
 	ragSearchErr              error
 	llmChunks                 []*pb.LLMChunk
 	ttsChunks                 []*pb.AudioChunk
+	ttsConfigs                chan inference.TTSConfig
 }
 
 func (f *fakeInferenceService) HealthCheck(ctx context.Context) error {
@@ -106,7 +107,13 @@ func (f *fakeInferenceService) GenerateLLMStream(context.Context, string, []infe
 	close(errCh)
 	return ch, errCh
 }
-func (f *fakeInferenceService) SynthesizeSpeechStream(context.Context, <-chan string, inference.TTSConfig) (<-chan *pb.AudioChunk, <-chan error) {
+func (f *fakeInferenceService) SynthesizeSpeechStream(_ context.Context, _ <-chan string, config inference.TTSConfig) (<-chan *pb.AudioChunk, <-chan error) {
+	if f.ttsConfigs != nil {
+		select {
+		case f.ttsConfigs <- config:
+		default:
+		}
+	}
 	ch := make(chan *pb.AudioChunk, len(f.ttsChunks))
 	errCh := make(chan error)
 	for _, chunk := range f.ttsChunks {

@@ -46,6 +46,11 @@ export interface BaiduXilingCharacterConfig {
   height?: number
 }
 
+export interface OfflineVideoTTSConfig {
+  provider: string
+  voice: string
+}
+
 export interface Character {
   id: string
   name: string
@@ -53,6 +58,7 @@ export interface Character {
   avatar_image: string
   avatar_backend: AvatarBackend
   baidu_xiling?: BaiduXilingCharacterConfig | null
+  offline_video_tts?: OfflineVideoTTSConfig | null
   idle_video_url?: string
   idle_video_urls?: string[]
   use_face_crop: boolean

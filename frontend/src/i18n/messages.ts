@@ -145,6 +145,7 @@ export const baseMessages = {
       reindexMaterial: '重建索引',
       deleteCharacter: '删除角色',
       deleteConfirm: '确定要删除这个角色吗？此操作不可撤销。',
+      openWorkspace: 'workspace →',
       saveCharacter: '保存角色',
     },
     settings: {
@@ -246,6 +247,7 @@ export const baseMessages = {
       closeFailureReason: '关闭',
       createFailed: '创建离线视频任务失败',
       loadFailed: '加载离线视频列表失败',
+      ttsPreferenceSaveFailed: '保存离线 TTS 配置失败',
       deleteConfirm: '确定要删除这个离线视频任务吗？',
       status: {
         queued: '排队中',
@@ -466,6 +468,7 @@ export const baseMessages = {
       reindexMaterial: 'Reindex',
       deleteCharacter: 'Delete Character',
       deleteConfirm: 'Delete this character? This cannot be undone.',
+      openWorkspace: 'workspace →',
       saveCharacter: 'Save Character',
     },
     settings: {
@@ -567,6 +570,7 @@ export const baseMessages = {
       closeFailureReason: 'Close',
       createFailed: 'Failed to create offline video job',
       loadFailed: 'Failed to load offline videos',
+      ttsPreferenceSaveFailed: 'Failed to save offline TTS settings',
       deleteConfirm: 'Delete this offline video job?',
       status: {
         queued: 'Queued',

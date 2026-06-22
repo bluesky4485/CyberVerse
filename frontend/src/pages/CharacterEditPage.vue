@@ -28,6 +28,7 @@ const form = ref<CharacterForm>({
   avatar_image: '',
   avatar_backend: 'local_image',
   baidu_xiling: null,
+  offline_video_tts: null,
   use_face_crop: false,
   image_mode: 'fixed',
   mode: 'standard',
@@ -420,6 +421,7 @@ onMounted(async () => {
           avatar_image: c.avatar_image,
           avatar_backend: normalizeAvatarBackend(c.avatar_backend),
           baidu_xiling: c.baidu_xiling ? { ...c.baidu_xiling } : null,
+          offline_video_tts: c.offline_video_tts ? { ...c.offline_video_tts } : null,
           use_face_crop: c.use_face_crop,
           image_mode: c.image_mode || 'fixed',
           mode: normalizeMode(c.mode),
@@ -695,6 +697,15 @@ const pageTitle = computed(() =>
             </div>
           </div>
         </div>
+
+        <button
+          v-if="isEdit"
+          type="button"
+          class="cv-pi-button cv-pi-button--compact mt-4 w-full"
+          @click="router.push(`/launch/${characterId}`)"
+        >
+          {{ t('characterEdit.openWorkspace') }}
+        </button>
 
         <!-- Image mode toggle -->
         <div v-if="!isBaiduXilingAvatar && isEdit && visibleImages.length > 1"
