@@ -27,10 +27,12 @@ type characterResponse struct {
 type testCharacterVoiceRequest struct {
 	VoiceProvider string `json:"voice_provider"`
 	VoiceType     string `json:"voice_type"`
+	Model         string `json:"model"`
 }
 
 type updateOfflineVideoTTSRequest struct {
 	Provider string `json:"provider"`
+	Model    string `json:"model"`
 	Voice    string `json:"voice"`
 }
 
@@ -265,6 +267,7 @@ func (r *Router) handleUpdateCharacterOfflineVideoTTS(w http.ResponseWriter, req
 	}
 	updated, err := r.charStore.UpdateOfflineVideoTTS(id, &character.OfflineVideoTTS{
 		Provider: provider,
+		Model:    strings.TrimSpace(body.Model),
 		Voice:    strings.TrimSpace(body.Voice),
 	})
 	if err != nil {
@@ -292,6 +295,7 @@ func (r *Router) handleTestCharacterVoice(w http.ResponseWriter, req *http.Reque
 
 	provider := strings.ToLower(strings.TrimSpace(body.VoiceProvider))
 	voiceType := strings.TrimSpace(body.VoiceType)
+	model := strings.TrimSpace(body.Model)
 
 	if provider == "" {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "voice_provider is required"})
@@ -299,6 +303,38 @@ func (r *Router) handleTestCharacterVoice(w http.ResponseWriter, req *http.Reque
 	}
 	if voiceType == "" {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "voice_type is required"})
+		return
+	}
+	if provider == "qwen" {
+		if model == "" {
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "model is required for qwen voice check"})
+			return
+		}
+		if !isCosyVoiceTTSModel(model) {
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "unsupported qwen tts model for voice check: " + model})
+			return
+		}
+		if !r.configuredTTSProvider(provider) {
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "unsupported tts provider: " + provider})
+			return
+		}
+		if r.orch == nil {
+			writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: errInferenceUnavailable.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+		defer cancel()
+
+		if err := r.orch.CheckTTSVoice(ctx, provider, model, voiceType); err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "voice check timed out"})
+				return
+			}
+			writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
 	}
 	if provider != "doubao" && provider != "qwen_omni" {
@@ -328,6 +364,10 @@ func (r *Router) handleTestCharacterVoice(w http.ResponseWriter, req *http.Reque
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func isCosyVoiceTTSModel(model string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "cosyvoice-")
 }
 
 // handleUploadAvatar uploads an image to the character's images/ directory.

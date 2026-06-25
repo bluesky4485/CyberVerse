@@ -65,6 +65,7 @@ class ASRRequestConfig:
 @dataclass
 class TTSRequestConfig:
     provider: str = ""
+    model: str = ""
     voice: str = ""
     speaking_style: str = ""
     language: str = ""

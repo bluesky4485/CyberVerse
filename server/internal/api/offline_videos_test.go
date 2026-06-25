@@ -32,7 +32,8 @@ func TestLocalOfflineVideoTextUsesOfflineTTSPreferenceNotOmniVoice(t *testing.T)
 		VoiceType:     "Tina",
 		OfflineVideoTTS: &character.OfflineVideoTTS{
 			Provider: "qwen",
-			Voice:    "Momo",
+			Model:    "cosyvoice-v3-flash",
+			Voice:    "longanyang",
 		},
 	})
 	if err != nil {
@@ -52,8 +53,8 @@ func TestLocalOfflineVideoTextUsesOfflineTTSPreferenceNotOmniVoice(t *testing.T)
 
 	select {
 	case cfg := <-inf.ttsConfigs:
-		if cfg.Provider != "qwen" || cfg.Voice != "Momo" {
-			t.Fatalf("expected offline tts qwen/Momo, got %+v", cfg)
+		if cfg.Provider != "qwen" || cfg.Model != "cosyvoice-v3-flash" || cfg.Voice != "longanyang" {
+			t.Fatalf("expected offline tts qwen/cosyvoice-v3-flash/longanyang, got %+v", cfg)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for tts config")
@@ -72,15 +73,16 @@ func TestLocalOfflineVideoTextFormTTSOverridesPreference(t *testing.T) {
 		"input_type":   "text",
 		"text":         "hello",
 		"tts_provider": "qwen",
-		"tts_voice":    "Cherry",
+		"tts_model":    "cosyvoice-v3.5-flash",
+		"tts_voice":    "voice-clone-1",
 	})
 
 	cfg, err := r.offlineVideoTTSConfig(req, char, "text", "offline-job")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider != "qwen" || cfg.Voice != "Cherry" {
-		t.Fatalf("expected form tts qwen/Cherry, got %+v", cfg)
+	if cfg.Provider != "qwen" || cfg.Model != "cosyvoice-v3.5-flash" || cfg.Voice != "voice-clone-1" {
+		t.Fatalf("expected form tts qwen/cosyvoice-v3.5-flash/voice-clone-1, got %+v", cfg)
 	}
 }
 

@@ -1,9 +1,17 @@
-import { OPENAI_VOICE_OPTIONS, QWEN_OMNI_VOICE_OPTIONS, QWEN_TTS_VOICE_OPTIONS, VOICE_OPTIONS } from '../types'
+import {
+  COSYVOICE_V3_FLASH_VOICE_OPTIONS,
+  COSYVOICE_V3_PLUS_VOICE_OPTIONS,
+  OPENAI_VOICE_OPTIONS,
+  QWEN_OMNI_VOICE_OPTIONS,
+  QWEN_TTS_VOICE_OPTIONS,
+  VOICE_OPTIONS,
+} from '../types'
 import type { ComposerTranslation } from 'vue-i18n'
 
 export const DEFAULT_OFFICIAL_VOICE = '温柔文雅'
 export const DEFAULT_QWEN_TTS_VOICE = 'Momo'
 export const DEFAULT_QWEN_OMNI_VOICE = 'Tina'
+export const DEFAULT_COSYVOICE_V3_VOICE = 'longanyang'
 
 type VoiceDisplayOption = {
   label: string
@@ -21,6 +29,12 @@ const qwenOmniVoiceLabelMap = new Map(
 )
 const openAIVoiceLabelMap = new Map(
   OPENAI_VOICE_OPTIONS.map(option => [option.value, option.label]),
+)
+const cosyVoiceLabelMap = new Map(
+  [
+    ...COSYVOICE_V3_FLASH_VOICE_OPTIONS,
+    ...COSYVOICE_V3_PLUS_VOICE_OPTIONS,
+  ].map(option => [option.value, option.label]),
 )
 
 const officialVoiceEnglishLabelMap = new Map<string, string>([
@@ -63,6 +77,34 @@ export function isOpenAIVoiceType(value: string): boolean {
   return openAIVoiceLabelMap.has(value.trim())
 }
 
+export function isCosyVoiceTTSModel(model: string): boolean {
+  return model.trim().toLowerCase().startsWith('cosyvoice-')
+}
+
+export function isCosyVoiceCloneOnlyModel(model: string): boolean {
+  return model.trim().toLowerCase().startsWith('cosyvoice-v3.5-')
+}
+
+export function isCosyVoiceBuiltinModel(model: string): boolean {
+  return model.trim().toLowerCase().startsWith('cosyvoice-v3-')
+}
+
+export function cosyVoiceBuiltinVoiceOptions(model: string): VoiceDisplayOption[] {
+  const normalized = model.trim().toLowerCase()
+  if (normalized === 'cosyvoice-v3-plus') return COSYVOICE_V3_PLUS_VOICE_OPTIONS
+  if (normalized === 'cosyvoice-v3-flash') return COSYVOICE_V3_FLASH_VOICE_OPTIONS
+  return []
+}
+
+export function isCosyVoiceBuiltinVoice(model: string, voice: string): boolean {
+  const normalizedVoice = voice.trim()
+  return cosyVoiceBuiltinVoiceOptions(model).some(option => option.value === normalizedVoice)
+}
+
+export function isCosyVoiceKnownBuiltinVoice(voice: string): boolean {
+  return cosyVoiceLabelMap.has(voice.trim())
+}
+
 function englishLabelFromCurrentLabel(label: string, value: string): string {
   const officialLabel = officialVoiceEnglishLabelMap.get(value)
   if (officialLabel) return officialLabel
@@ -91,6 +133,7 @@ export function formatVoiceTypeDisplay(
   const label = qwenTTSVoiceLabelMap.get(trimmed)
     ?? qwenOmniVoiceLabelMap.get(trimmed)
     ?? openAIVoiceLabelMap.get(trimmed)
+    ?? cosyVoiceLabelMap.get(trimmed)
     ?? officialVoiceLabelMap.get(trimmed)
   if (label) {
     return locale.toLowerCase().startsWith('en') ? englishLabelFromCurrentLabel(label, trimmed) : label

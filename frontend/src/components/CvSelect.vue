@@ -60,7 +60,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
             : 'hover:border-cv-text-muted',
       ]"
     >
-      <span :class="selectedLabel ? 'text-cv-text' : 'text-cv-text-muted'">
+      <span class="block truncate" :class="selectedLabel ? 'text-cv-text' : 'text-cv-text-muted'">
         {{ selectedLabel || placeholder || '' }}
       </span>
     </button>

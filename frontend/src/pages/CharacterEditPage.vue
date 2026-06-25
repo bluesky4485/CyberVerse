@@ -8,9 +8,25 @@ import CvSelect from '../components/CvSelect.vue'
 import KnowledgeSourceManager from '../components/KnowledgeSourceManager.vue'
 import { useCharacterStore } from '../stores/characters'
 import type { AvatarBackend, BaiduXilingCharacterConfig, CharacterComponents, CharacterForm, ComponentOption, ComponentsResponse, ImageInfo } from '../types'
-import { OPENAI_VOICE_OPTIONS, QWEN_OMNI_VOICE_OPTIONS, QWEN_TTS_VOICE_OPTIONS, VOICE_OPTIONS } from '../types'
+import { OPENAI_VOICE_OPTIONS, QWEN_OMNI_VOICE_OPTIONS, QWEN_TTS_MODEL_OPTIONS, QWEN_TTS_VOICE_OPTIONS, VOICE_OPTIONS } from '../types'
 import { uploadAvatar, getCharacterImages, deleteCharacterImage, activateCharacterImage, testCharacterVoice, getComponents, getBaiduXilingFigure } from '../services/api'
-import { DEFAULT_OFFICIAL_VOICE, DEFAULT_QWEN_OMNI_VOICE, DEFAULT_QWEN_TTS_VOICE, isOfficialVoiceType, isOpenAIVoiceType, isQwenOmniVoiceType, isQwenTTSVoiceType, localizedVoiceOptions } from '../utils/voice'
+import {
+  DEFAULT_COSYVOICE_V3_VOICE,
+  DEFAULT_OFFICIAL_VOICE,
+  DEFAULT_QWEN_OMNI_VOICE,
+  DEFAULT_QWEN_TTS_VOICE,
+  cosyVoiceBuiltinVoiceOptions,
+  isCosyVoiceBuiltinModel,
+  isCosyVoiceBuiltinVoice,
+  isCosyVoiceCloneOnlyModel,
+  isCosyVoiceKnownBuiltinVoice,
+  isCosyVoiceTTSModel,
+  isOfficialVoiceType,
+  isOpenAIVoiceType,
+  isQwenOmniVoiceType,
+  isQwenTTSVoiceType,
+  localizedVoiceOptions,
+} from '../utils/voice'
 
 const router = useRouter()
 const route = useRoute()
@@ -47,6 +63,7 @@ const pendingFiles = ref<File[]>([])
 const images = ref<ImageInfo[]>([])
 const deletedImageFilenames = ref<Set<string>>(new Set())
 const voiceMode = ref<'official' | 'custom'>('official')
+const cosyVoiceMode = ref<'official' | 'custom'>('official')
 const customVoiceType = ref('')
 const voiceError = ref('')
 const testingVoice = ref(false)
@@ -58,7 +75,8 @@ const baiduLookupLoading = ref(false)
 const baiduLookupError = ref('')
 const OFFICIAL_VOICE_PREVIEW_URL = 'https://console.volcengine.com/speech/new/experience/call'
 const CUSTOM_VOICE_CLONE_URL = 'https://console.volcengine.com/speech/new/experience/clone'
-const QWEN_TTS_VOICE_PREVIEW_URL = 'https://help.aliyun.com/zh/model-studio/qwen-tts-realtime'
+const QWEN_TTS_VOICE_PREVIEW_URL = 'https://help.aliyun.com/zh/model-studio/qwen-tts-voice-list'
+const COSYVOICE_VOICE_LIST_URL = 'https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list'
 const QWEN_OMNI_VOICE_LIST_URL = 'https://help.aliyun.com/zh/model-studio/omni-voice-list'
 const BAIDU_XILING_OVERVIEW_URL = 'https://xiling.cloud.baidu.com/open/overview'
 const componentCatalog = ref<ComponentsResponse>({
@@ -105,11 +123,23 @@ const avatarBackendOptions = computed(() => [
 ])
 const trimmedCustomVoiceType = computed(() => customVoiceType.value.trim())
 const selectedTTS = computed(() => form.value.components?.tts || DEFAULT_COMPONENTS.tts)
+const selectedTTSModel = computed(() => form.value.components?.tts_model || selectedComponent('tts')?.model || '')
 const selectedOmniProvider = computed(() => form.value.voice_provider || 'doubao')
 const usesDoubaoVoice = computed(() =>
   form.value.mode === 'omni'
     ? selectedOmniProvider.value === 'doubao'
     : selectedTTS.value === 'doubao'
+)
+const usesCosyVoiceTTS = computed(() =>
+  form.value.mode !== 'omni'
+  && selectedTTS.value === 'qwen'
+  && isCosyVoiceTTSModel(selectedTTSModel.value)
+)
+const usesCosyVoiceCloneOnlyTTS = computed(() =>
+  usesCosyVoiceTTS.value && isCosyVoiceCloneOnlyModel(selectedTTSModel.value)
+)
+const usesCosyVoiceBuiltinTTS = computed(() =>
+  usesCosyVoiceTTS.value && isCosyVoiceBuiltinModel(selectedTTSModel.value)
 )
 const usesQwenOmniVoice = computed(() =>
   form.value.mode === 'omni' && selectedOmniProvider.value === 'qwen_omni'
@@ -132,6 +162,13 @@ function selectedComponent(category: 'llm' | 'asr' | 'tts') {
   return componentCatalog.value[category].find(item => item.id === selected)
 }
 function modelOptions(category: 'llm' | 'asr' | 'tts') {
+  if (category === 'tts' && selectedTTS.value === 'qwen') {
+    const currentModel = selectedTTSModel.value
+    const hasCurrent = QWEN_TTS_MODEL_OPTIONS.some(option => option.value === currentModel)
+    return hasCurrent || !currentModel
+      ? QWEN_TTS_MODEL_OPTIONS
+      : [{ label: currentModel, value: currentModel }, ...QWEN_TTS_MODEL_OPTIONS]
+  }
   const model = selectedComponent(category)?.model || ''
   return model ? [{ label: model, value: model }] : []
 }
@@ -144,13 +181,19 @@ const asrModel = computed({
   set: () => {},
 })
 const ttsModel = computed({
-  get: () => selectedComponent('tts')?.model || '',
-  set: () => {},
+  get: () => selectedTTSModel.value,
+  set: (value: string) => {
+    form.value.components.tts_model = value
+  },
 })
 const llmModelOptions = computed(() => modelOptions('llm'))
 const asrModelOptions = computed(() => modelOptions('asr'))
 const ttsModelOptions = computed(() => modelOptions('tts'))
 const qwenTTSVoiceOptions = computed(() => localizedVoiceOptions(QWEN_TTS_VOICE_OPTIONS, locale.value))
+const cosyVoiceOfficialOptions = computed(() => localizedVoiceOptions(
+  cosyVoiceBuiltinVoiceOptions(selectedTTSModel.value),
+  locale.value,
+))
 const qwenOmniVoiceOptions = computed(() => localizedVoiceOptions(QWEN_OMNI_VOICE_OPTIONS, locale.value))
 const officialVoiceOptions = computed(() => localizedVoiceOptions(VOICE_OPTIONS, locale.value))
 const openAIVoiceOptions = computed(() => localizedVoiceOptions(OPENAI_VOICE_OPTIONS, locale.value))
@@ -164,6 +207,7 @@ const canSave = computed(() =>
 const canCheckVoice = computed(() =>
   (usesDoubaoVoice.value && (voiceMode.value === 'official' || !!trimmedCustomVoiceType.value))
   || (usesQwenOmniVoice.value && !!form.value.voice_type.trim())
+  || (usesCosyVoiceTTS.value && !!form.value.voice_type.trim())
 )
 const voiceCheckSucceeded = computed(() => voiceTestStatus.value === 'success')
 
@@ -172,12 +216,30 @@ function normalizeComponents(components?: Partial<CharacterComponents>): Charact
     llm: components?.llm || DEFAULT_COMPONENTS.llm,
     asr: components?.asr || DEFAULT_COMPONENTS.asr,
     tts: components?.tts || DEFAULT_COMPONENTS.tts,
+    tts_model: components?.tts_model || '',
   }
+}
+
+function defaultModelForTTS(tts: string): string {
+  if (tts === 'qwen') {
+    return QWEN_TTS_MODEL_OPTIONS[0]?.value || selectedComponent('tts')?.model || ''
+  }
+  return selectedComponent('tts')?.model || ''
+}
+
+function isPresetVoice(value: string): boolean {
+  return isQwenTTSVoiceType(value)
+    || isOpenAIVoiceType(value)
+    || isQwenOmniVoiceType(value)
+    || isOfficialVoiceType(value)
+    || isCosyVoiceKnownBuiltinVoice(value)
 }
 
 function defaultVoiceForTTS(tts: string) {
   if (tts === 'openai') return 'nova'
   if (tts === 'doubao') return DEFAULT_OFFICIAL_VOICE
+  if (tts === 'qwen' && usesCosyVoiceCloneOnlyTTS.value) return ''
+  if (tts === 'qwen' && usesCosyVoiceBuiltinTTS.value) return DEFAULT_COSYVOICE_V3_VOICE
   return DEFAULT_QWEN_TTS_VOICE
 }
 
@@ -254,6 +316,34 @@ function applyTTSVoiceDefault(tts: string, force = false) {
   }
   form.value.voice_provider = tts
   const current = form.value.voice_type.trim()
+  if (tts === 'qwen' && usesCosyVoiceCloneOnlyTTS.value) {
+    cosyVoiceMode.value = 'custom'
+    if (!current || isPresetVoice(current)) {
+      form.value.voice_type = ''
+    }
+    return
+  }
+
+  if (tts === 'qwen' && usesCosyVoiceBuiltinTTS.value) {
+    if (cosyVoiceMode.value === 'custom') {
+      if (!current || isPresetVoice(current)) {
+        form.value.voice_type = ''
+      }
+      return
+    }
+    if (current && isCosyVoiceBuiltinVoice(selectedTTSModel.value, current)) {
+      cosyVoiceMode.value = 'official'
+      return
+    }
+    if (current && !isPresetVoice(current)) {
+      cosyVoiceMode.value = 'custom'
+      return
+    }
+    form.value.voice_type = defaultVoiceForTTS(tts)
+    cosyVoiceMode.value = 'official'
+    return
+  }
+
   if (force || !current) {
     form.value.voice_type = defaultVoiceForTTS(tts)
     if (tts === 'doubao') syncVoiceInputs(form.value.voice_type)
@@ -336,6 +426,18 @@ function setVoiceMode(mode: 'official' | 'custom') {
   }
 }
 
+function setCosyVoiceMode(mode: 'official' | 'custom') {
+  cosyVoiceMode.value = mode
+  voiceError.value = ''
+  if (mode === 'official') {
+    if (!isCosyVoiceBuiltinVoice(selectedTTSModel.value, form.value.voice_type)) {
+      form.value.voice_type = defaultVoiceForTTS(selectedTTS.value)
+    }
+  } else if (isPresetVoice(form.value.voice_type.trim())) {
+    form.value.voice_type = ''
+  }
+}
+
 function resolveVoiceType() {
   if (usesQwenOmniVoice.value) {
     const voice = form.value.voice_type.trim() || DEFAULT_QWEN_OMNI_VOICE
@@ -345,7 +447,22 @@ function resolveVoiceType() {
 
   if (!usesDoubaoVoice.value) {
     applyTTSVoiceDefault(selectedTTS.value)
-    return form.value.voice_type.trim() || defaultVoiceForTTS(selectedTTS.value)
+    const voice = form.value.voice_type.trim() || defaultVoiceForTTS(selectedTTS.value)
+    if (usesCosyVoiceCloneOnlyTTS.value && !voice) {
+      voiceError.value = t('characterEdit.cosyVoiceIdRequired')
+      return null
+    }
+    if (usesCosyVoiceBuiltinTTS.value) {
+      if (cosyVoiceMode.value === 'custom' && !voice) {
+        voiceError.value = t('characterEdit.cosyVoiceIdRequired')
+        return null
+      }
+      if (cosyVoiceMode.value === 'official' && !isCosyVoiceBuiltinVoice(selectedTTSModel.value, voice)) {
+        form.value.voice_type = defaultVoiceForTTS(selectedTTS.value)
+        return form.value.voice_type
+      }
+    }
+    return voice
   }
 
   if (voiceMode.value === 'custom') {
@@ -359,13 +476,20 @@ function resolveVoiceType() {
   return form.value.voice_type.trim() || DEFAULT_OFFICIAL_VOICE
 }
 
+function resolveVoiceProviderForCheck() {
+  if (form.value.mode === 'omni') return form.value.voice_provider.trim()
+  return selectedTTS.value
+}
+
 watch(
   [
     () => form.value.voice_provider,
     () => form.value.voice_type,
     () => form.value.mode,
     () => form.value.components.tts,
+    () => selectedTTSModel.value,
     () => voiceMode.value,
+    () => cosyVoiceMode.value,
     () => customVoiceType.value,
   ],
   () => {
@@ -378,7 +502,17 @@ watch(
   (tts) => {
     if (hydratingCharacter.value) return
     voiceError.value = ''
+    form.value.components.tts_model = defaultModelForTTS(tts)
     applyTTSVoiceDefault(tts, true)
+  }
+)
+
+watch(
+  () => selectedTTSModel.value,
+  () => {
+    if (hydratingCharacter.value || form.value.mode === 'omni') return
+    voiceError.value = ''
+    applyTTSVoiceDefault(selectedTTS.value, true)
   }
 )
 
@@ -519,8 +653,9 @@ async function handleCheckVoice() {
   testingVoice.value = true
   try {
     await testCharacterVoice({
-      voice_provider: form.value.voice_provider.trim(),
+      voice_provider: resolveVoiceProviderForCheck(),
       voice_type: voiceType,
+      model: usesCosyVoiceTTS.value ? selectedTTSModel.value : undefined,
     })
     voiceTestStatus.value = 'success'
     voiceTestMessage.value = ''
@@ -838,7 +973,7 @@ const pageTitle = computed(() =>
               </label>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-[90px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-start">
+            <div class="grid gap-3 md:grid-cols-[90px_minmax(0,1fr)_minmax(0,1fr)] md:items-start">
               <span class="text-[13px] font-medium text-cv-text-secondary md:pt-[31px]">TTS</span>
               <label class="block">
                 <span class="text-[12px] font-medium text-cv-text-muted">Provider</span>
@@ -857,15 +992,126 @@ const pageTitle = computed(() =>
                 />
               </label>
               <template v-if="!usesDoubaoVoice && selectedTTS === 'qwen'">
-                <label class="block">
+                <label class="block md:col-span-2 md:col-start-2">
                   <span class="text-[12px] font-medium text-cv-text-muted">{{ t('common.voice') }}</span>
+                  <div v-if="usesCosyVoiceCloneOnlyTTS" class="mt-1.5 flex items-start gap-3">
+                    <div class="relative min-w-0 flex-1">
+                      <input
+                        v-model="form.voice_type"
+                        type="text"
+                        :placeholder="t('characterEdit.cosyVoiceIdPlaceholder')"
+                        class="h-[42px] w-full bg-cv-elevated border border-cv-border rounded-cv-md px-4 text-sm text-cv-text placeholder:text-cv-text-muted focus:outline-none transition-all"
+                        :class="voiceCheckSucceeded
+                          ? 'pr-11 border-cv-success focus:border-cv-success focus:shadow-[0_0_0_2px_rgba(34,197,94,0.15)]'
+                          : 'focus:border-cv-accent focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)]'"
+                      />
+                      <span
+                        v-if="voiceCheckSucceeded"
+                        class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cv-success"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                          <path d="M3.5 8.5l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      @click="handleCheckVoice"
+                      :disabled="testingVoice || !canCheckVoice"
+                      :class="{ 'opacity-40 cursor-not-allowed': testingVoice || !canCheckVoice }"
+                      class="cv-pi-button cv-pi-button--compact h-[42px] w-[96px] shrink-0 px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {{ t('common.check') }}
+                    </button>
+                  </div>
+                  <template v-else-if="usesCosyVoiceBuiltinTTS">
+                    <div class="mt-1.5 grid gap-3 lg:grid-cols-[184px_minmax(0,1fr)_96px]">
+                      <div class="cv-pi-segment h-[42px] grid-cols-2 text-[11px]">
+                        <button
+                          type="button"
+                          @click="setCosyVoiceMode('official')"
+                          class="cv-pi-segment-item cursor-pointer"
+                          :class="{ 'cv-pi-segment-item--active': cosyVoiceMode === 'official' }"
+                        >
+                          {{ t('characterEdit.officialVoice') }}
+                        </button>
+                        <button
+                          type="button"
+                          @click="setCosyVoiceMode('custom')"
+                          class="cv-pi-segment-item cursor-pointer"
+                          :class="{ 'cv-pi-segment-item--active': cosyVoiceMode === 'custom' }"
+                        >
+                          {{ t('characterEdit.clonedVoice') }}
+                        </button>
+                      </div>
+                      <CvSelect
+                        v-if="cosyVoiceMode === 'official'"
+                        v-model="form.voice_type"
+                        :options="cosyVoiceOfficialOptions"
+                        :success="voiceCheckSucceeded"
+                        class="min-w-0"
+                      />
+                      <div v-else class="relative min-w-0">
+                        <input
+                          v-model="form.voice_type"
+                          type="text"
+                          :placeholder="t('characterEdit.cosyVoiceIdPlaceholder')"
+                          class="h-[42px] w-full bg-cv-elevated border border-cv-border rounded-cv-md px-4 text-sm text-cv-text placeholder:text-cv-text-muted focus:outline-none transition-all"
+                          :class="voiceCheckSucceeded
+                            ? 'pr-11 border-cv-success focus:border-cv-success focus:shadow-[0_0_0_2px_rgba(34,197,94,0.15)]'
+                            : 'focus:border-cv-accent focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)]'"
+                        />
+                        <span
+                          v-if="voiceCheckSucceeded"
+                          class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cv-success"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M3.5 8.5l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                          </svg>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        @click="handleCheckVoice"
+                        :disabled="testingVoice || !canCheckVoice"
+                        :class="{ 'opacity-40 cursor-not-allowed': testingVoice || !canCheckVoice }"
+                        class="cv-pi-button cv-pi-button--compact h-[42px] w-[96px] shrink-0 px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {{ t('common.check') }}
+                      </button>
+                    </div>
+                  </template>
                   <CvSelect
+                    v-else
                     v-model="form.voice_type"
                     :options="qwenTTSVoiceOptions"
                     class="mt-1.5"
                   />
                 </label>
-                <p class="text-[11px] leading-5 text-cv-text-muted md:col-span-3 md:col-start-2 md:-mt-1">
+                <p
+                  v-if="usesCosyVoiceCloneOnlyTTS"
+                  class="text-[11px] leading-5 text-cv-text-muted md:col-span-2 md:col-start-2 md:-mt-1"
+                >
+                  {{ t('characterEdit.cosyVoiceIdHint') }}
+                </p>
+                <p
+                  v-else-if="usesCosyVoiceBuiltinTTS"
+                  class="text-[11px] leading-5 text-cv-text-muted md:col-span-2 md:col-start-2 md:-mt-1"
+                >
+                  {{ t('characterEdit.cosyVoiceBuiltinHint') }}
+                  <a
+                    :href="COSYVOICE_VOICE_LIST_URL"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline underline-offset-2 transition-colors hover:text-cv-text"
+                  >
+                    {{ t('characterEdit.cosyVoiceVoiceList') }}
+                  </a>
+                </p>
+                <p
+                  v-else
+                  class="text-[11px] leading-5 text-cv-text-muted md:col-span-2 md:col-start-2 md:-mt-1"
+                >
                   {{ t('characterEdit.canPreviewAt') }}
                   <a
                     :href="QWEN_TTS_VOICE_PREVIEW_URL"
@@ -877,8 +1123,20 @@ const pageTitle = computed(() =>
                   </a>
                   {{ t('characterEdit.previewVoice') }}
                 </p>
+                <p
+                  v-if="usesCosyVoiceTTS && voiceError"
+                  class="text-[11px] leading-5 text-cv-danger md:col-span-2 md:col-start-2 md:-mt-1"
+                >
+                  {{ voiceError }}
+                </p>
+                <p
+                  v-if="usesCosyVoiceTTS && voiceTestStatus === 'error' && voiceTestMessage"
+                  class="text-[11px] leading-5 text-cv-danger whitespace-pre-wrap break-all md:col-span-2 md:col-start-2 md:-mt-1"
+                >
+                  {{ voiceTestMessage }}
+                </p>
               </template>
-              <label v-else-if="isOpenAIVoice" class="block">
+              <label v-else-if="isOpenAIVoice" class="block md:col-span-2 md:col-start-2">
                 <span class="text-[12px] font-medium text-cv-text-muted">{{ t('common.voice') }}</span>
                 <CvSelect
                   v-model="form.voice_type"
@@ -886,35 +1144,35 @@ const pageTitle = computed(() =>
                   class="mt-1.5"
                 />
               </label>
-              <div v-else class="block">
+              <div v-else class="block md:col-span-2 md:col-start-2">
                 <span class="text-[12px] font-medium text-cv-text-muted">{{ t('common.voice') }}</span>
-                <div class="cv-pi-segment mt-1.5 h-[42px] grid-cols-2">
-                  <button
-                    type="button"
-                    @click="setVoiceMode('official')"
-                    class="cv-pi-segment-item cursor-pointer"
-                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'official' }"
-                  >
-                    {{ t('characterEdit.officialVoice') }}
-                  </button>
-                  <button
-                    type="button"
-                    @click="setVoiceMode('custom')"
-                    class="cv-pi-segment-item cursor-pointer"
-                    :class="{ 'cv-pi-segment-item--active': voiceMode === 'custom' }"
-                  >
-                    {{ t('characterEdit.clonedVoice') }}
-                  </button>
-                </div>
-                <div class="mt-3 flex items-start gap-3">
+                <div class="mt-1.5 grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_auto]">
+                  <div class="cv-pi-segment h-[42px] grid-cols-2">
+                    <button
+                      type="button"
+                      @click="setVoiceMode('official')"
+                      class="cv-pi-segment-item cursor-pointer"
+                      :class="{ 'cv-pi-segment-item--active': voiceMode === 'official' }"
+                    >
+                      {{ t('characterEdit.officialVoice') }}
+                    </button>
+                    <button
+                      type="button"
+                      @click="setVoiceMode('custom')"
+                      class="cv-pi-segment-item cursor-pointer"
+                      :class="{ 'cv-pi-segment-item--active': voiceMode === 'custom' }"
+                    >
+                      {{ t('characterEdit.clonedVoice') }}
+                    </button>
+                  </div>
                   <CvSelect
                     v-if="voiceMode === 'official'"
                     v-model="form.voice_type"
                     :options="officialVoiceOptions"
                     :success="voiceCheckSucceeded"
-                    class="min-w-0 flex-1"
+                    class="min-w-0"
                   />
-                  <div v-else class="relative min-w-0 flex-1">
+                  <div v-else class="relative min-w-0">
                     <input
                       v-model="customVoiceType"
                       type="text"

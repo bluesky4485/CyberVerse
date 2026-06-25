@@ -33,6 +33,7 @@ type LLMConfig struct {
 
 type TTSConfig struct {
 	Provider      string
+	Model         string
 	Voice         string
 	SpeakingStyle string
 	Language      string

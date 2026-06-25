@@ -169,7 +169,8 @@ func TestOfflineVideoTTSPersistAcrossStoreReload(t *testing.T) {
 		VoiceType:     "Tina",
 		OfflineVideoTTS: &OfflineVideoTTS{
 			Provider: " qwen ",
-			Voice:    " Momo ",
+			Model:    " cosyvoice-v3-flash ",
+			Voice:    " longanyang ",
 		},
 	})
 	if err != nil {
@@ -187,8 +188,10 @@ func TestOfflineVideoTTSPersistAcrossStoreReload(t *testing.T) {
 	if got.OfflineVideoTTS == nil {
 		t.Fatal("expected offline_video_tts config")
 	}
-	if got.OfflineVideoTTS.Provider != "qwen" || got.OfflineVideoTTS.Voice != "Momo" {
-		t.Fatalf("expected trimmed offline_video_tts qwen/Momo, got %#v", got.OfflineVideoTTS)
+	if got.OfflineVideoTTS.Provider != "qwen" ||
+		got.OfflineVideoTTS.Model != "cosyvoice-v3-flash" ||
+		got.OfflineVideoTTS.Voice != "longanyang" {
+		t.Fatalf("expected trimmed offline_video_tts qwen/cosyvoice-v3-flash/longanyang, got %#v", got.OfflineVideoTTS)
 	}
 }
 

@@ -160,6 +160,7 @@ export interface CreateOfflineVideoInput {
   audio?: File | null
   inputAudioUrl?: string
   ttsProvider?: string
+  ttsModel?: string
   ttsVoice?: string
   width?: number
   height?: number
@@ -184,6 +185,7 @@ export async function createOfflineVideo(characterId: string, input: CreateOffli
   if (input.audio) form.append('audio', input.audio)
   if (input.inputAudioUrl) form.append('input_audio_url', input.inputAudioUrl)
   if (input.ttsProvider) form.append('tts_provider', input.ttsProvider)
+  if (input.ttsModel) form.append('tts_model', input.ttsModel)
   if (input.ttsVoice) form.append('tts_voice', input.ttsVoice)
   if (input.width) form.append('width', String(input.width))
   if (input.height) form.append('height', String(input.height))
@@ -272,7 +274,7 @@ export async function updateCharacter(id: string, data: CharacterForm): Promise<
 
 export async function updateOfflineVideoTTS(
   id: string,
-  data: { provider: string; voice: string },
+  data: { provider: string; model?: string; voice: string },
 ): Promise<Character> {
   return request(`/characters/${id}/offline-video-tts`, {
     method: 'PUT',
@@ -284,7 +286,7 @@ export async function deleteCharacter(id: string): Promise<void> {
   return request(`/characters/${id}`, { method: 'DELETE' })
 }
 
-export async function testCharacterVoice(data: { voice_provider: string; voice_type: string }): Promise<{ status: string }> {
+export async function testCharacterVoice(data: { voice_provider: string; voice_type: string; model?: string }): Promise<{ status: string }> {
   return request('/characters/test-voice', {
     method: 'POST',
     body: JSON.stringify(data),

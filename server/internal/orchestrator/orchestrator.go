@@ -1040,6 +1040,51 @@ func (o *Orchestrator) CheckVoice(ctx context.Context, provider string, voiceTyp
 	})
 }
 
+func (o *Orchestrator) CheckTTSVoice(ctx context.Context, provider string, model string, voiceType string) error {
+	if o == nil || o.inference == nil {
+		return errors.New("inference service is not configured")
+	}
+	textCh := make(chan string, 1)
+	textCh <- "你好，这是音色检测。"
+	close(textCh)
+
+	audioCh, errCh := o.inference.SynthesizeSpeechStream(ctx, textCh, inference.TTSConfig{
+		Provider:  provider,
+		Model:     model,
+		Voice:     voiceType,
+		Language:  "zh",
+		SessionID: "voice-check",
+	})
+
+	receivedAudio := false
+	for audioCh != nil || errCh != nil {
+		select {
+		case chunk, ok := <-audioCh:
+			if !ok {
+				audioCh = nil
+				continue
+			}
+			if len(chunk.GetData()) > 0 {
+				receivedAudio = true
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				errCh = nil
+				continue
+			}
+			if err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if !receivedAudio {
+		return errors.New("voice check returned no audio")
+	}
+	return nil
+}
+
 func (o *Orchestrator) AvatarInfo(ctx context.Context) (*pb.AvatarInfo, error) {
 	if o == nil || o.inference == nil {
 		return nil, errors.New("inference service is not configured")
@@ -2656,6 +2701,7 @@ func (o *Orchestrator) runStandardPipeline(ctx context.Context, session *Session
 	// 3. Start TTS stream
 	ttsAudioCh, ttsErrCh := o.inference.SynthesizeSpeechStream(ctx, textCh, inference.TTSConfig{
 		Provider:      components.TTS,
+		Model:         components.TTSModel,
 		Voice:         voice,
 		SpeakingStyle: speakingStyle,
 		Language:      language,
@@ -4208,6 +4254,7 @@ func (o *Orchestrator) runAssistantSpeechPipeline(ctx context.Context, session *
 	close(textCh)
 	ttsAudioCh, ttsErrCh := o.inference.SynthesizeSpeechStream(ctx, textCh, inference.TTSConfig{
 		Provider:      components.TTS,
+		Model:         components.TTSModel,
 		Voice:         voice,
 		SpeakingStyle: speakingStyle,
 		Language:      language,

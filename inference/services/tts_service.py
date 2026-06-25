@@ -5,6 +5,8 @@ from inference.core.registry import PluginRegistry
 from inference.generated import common_pb2, tts_pb2, tts_pb2_grpc
 from inference.plugins.tts.base import TTSPlugin
 
+_MODEL_PROVIDER_MARKER = "::model="
+
 
 class TTSGRPCService(tts_pb2_grpc.TTSServiceServicer):
 
@@ -28,8 +30,12 @@ class TTSGRPCService(tts_pb2_grpc.TTSServiceServicer):
             return
 
         request_config = self._request_config(first.config if first.HasField("config") else None)
+        provider, model = self._split_provider_model(request_config.provider)
+        request_config.provider = provider
+        if model:
+            request_config.model = model
         try:
-            plugin = self._get_plugin(request_config.provider)
+            plugin = self._get_plugin(provider)
         except (KeyError, RuntimeError) as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
 
@@ -63,3 +69,11 @@ class TTSGRPCService(tts_pb2_grpc.TTSServiceServicer):
             language=config.language,
             session_id=config.session_id,
         )
+
+    @staticmethod
+    def _split_provider_model(provider: str) -> tuple[str, str]:
+        provider = provider.strip()
+        if _MODEL_PROVIDER_MARKER not in provider:
+            return provider, ""
+        base, model = provider.split(_MODEL_PROVIDER_MARKER, 1)
+        return base.strip(), model.strip()

@@ -3,6 +3,9 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 DEFAULT_DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 DEFAULT_DASHSCOPE_WS_URL = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
+DEFAULT_DASHSCOPE_COSYVOICE_WS_URL = (
+    "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference"
+)
 
 
 def dashscope_base_url() -> str:
@@ -18,6 +21,13 @@ def dashscope_realtime_ws_url(model: str, service_env_key: str) -> str:
     return _with_model_query(raw_url, model)
 
 
+def dashscope_cosyvoice_ws_url() -> str:
+    return (
+        os.environ.get("DASHSCOPE_COSYVOICE_WS_URL")
+        or _cosyvoice_ws_url_from_base_url(dashscope_base_url())
+    )
+
+
 def _ws_url_from_base_url(base_url: str) -> str:
     parsed = urlsplit(base_url)
     if not parsed.scheme or not parsed.netloc:
@@ -25,6 +35,15 @@ def _ws_url_from_base_url(base_url: str) -> str:
 
     scheme = "wss" if parsed.scheme in {"http", "https"} else parsed.scheme
     return urlunsplit((scheme, parsed.netloc, "/api-ws/v1/realtime", "", ""))
+
+
+def _cosyvoice_ws_url_from_base_url(base_url: str) -> str:
+    parsed = urlsplit(base_url)
+    if not parsed.scheme or not parsed.netloc:
+        return DEFAULT_DASHSCOPE_COSYVOICE_WS_URL
+
+    scheme = "wss" if parsed.scheme in {"http", "https"} else parsed.scheme
+    return urlunsplit((scheme, parsed.netloc, "/api-ws/v1/inference", "", ""))
 
 
 def _with_model_query(url: str, model: str) -> str:

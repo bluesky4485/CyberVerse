@@ -175,7 +175,7 @@ func TestUpdateCharacterOfflineVideoTTS(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPut,
 		"/api/v1/characters/"+char.ID+"/offline-video-tts",
-		strings.NewReader(`{"provider":"qwen","voice":"Momo"}`),
+		strings.NewReader(`{"provider":"qwen","model":"cosyvoice-v3-flash","voice":"longanyang"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -193,7 +193,7 @@ func TestUpdateCharacterOfflineVideoTTS(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected offline_video_tts in response, got %#v", resp["offline_video_tts"])
 	}
-	if offlineTTS["provider"] != "qwen" || offlineTTS["voice"] != "Momo" {
+	if offlineTTS["provider"] != "qwen" || offlineTTS["model"] != "cosyvoice-v3-flash" || offlineTTS["voice"] != "longanyang" {
 		t.Fatalf("unexpected offline_video_tts: %#v", offlineTTS)
 	}
 
@@ -201,8 +201,11 @@ func TestUpdateCharacterOfflineVideoTTS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.OfflineVideoTTS == nil || updated.OfflineVideoTTS.Provider != "qwen" || updated.OfflineVideoTTS.Voice != "Momo" {
-		t.Fatalf("expected stored offline tts qwen/Momo, got %#v", updated.OfflineVideoTTS)
+	if updated.OfflineVideoTTS == nil ||
+		updated.OfflineVideoTTS.Provider != "qwen" ||
+		updated.OfflineVideoTTS.Model != "cosyvoice-v3-flash" ||
+		updated.OfflineVideoTTS.Voice != "longanyang" {
+		t.Fatalf("expected stored offline tts qwen/cosyvoice-v3-flash/longanyang, got %#v", updated.OfflineVideoTTS)
 	}
 }
 
@@ -292,6 +295,36 @@ func TestTestCharacterVoiceSupportsQwenOmniProvider(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for check voice config")
+	}
+}
+
+func TestTestCharacterVoiceSupportsCosyVoiceTTS(t *testing.T) {
+	inf := &fakeInferenceService{
+		ttsConfigs: make(chan inference.TTSConfig, 1),
+		ttsChunks:  []*pb.AudioChunk{{Data: []byte{1, 2, 3}, SampleRate: 16000, Channels: 1, Format: "pcm"}},
+	}
+	r := newTestRouterWithInference(inf)
+
+	req := httptest.NewRequest(
+		"POST",
+		"/api/v1/characters/test-voice",
+		strings.NewReader(`{"voice_provider":"qwen","model":"cosyvoice-v3.5-flash","voice_type":"cosyvoice-v3.5-flash-peiyin-abc"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	select {
+	case config := <-inf.ttsConfigs:
+		if config.Provider != "qwen" || config.Model != "cosyvoice-v3.5-flash" || config.Voice != "cosyvoice-v3.5-flash-peiyin-abc" {
+			t.Fatalf("unexpected tts config: %+v", config)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for tts config")
 	}
 }
 

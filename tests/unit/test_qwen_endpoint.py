@@ -1,5 +1,6 @@
 from inference.plugins.qwen_endpoint import (
     dashscope_base_url,
+    dashscope_cosyvoice_ws_url,
     dashscope_realtime_ws_url,
 )
 
@@ -37,4 +38,29 @@ def test_realtime_ws_url_uses_service_env_and_model_query(monkeypatch):
     assert (
         dashscope_realtime_ws_url("qwen3-asr-flash-realtime", "DASHSCOPE_ASR_WS_URL")
         == "wss://asr.example.com/realtime?foo=bar&model=qwen3-asr-flash-realtime"
+    )
+
+
+def test_cosyvoice_ws_url_derived_from_base_url(monkeypatch):
+    monkeypatch.delenv("DASHSCOPE_COSYVOICE_WS_URL", raising=False)
+    monkeypatch.setenv(
+        "DASHSCOPE_BASE_URL",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    assert (
+        dashscope_cosyvoice_ws_url()
+        == "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+    )
+
+
+def test_cosyvoice_ws_url_uses_dedicated_env(monkeypatch):
+    monkeypatch.setenv(
+        "DASHSCOPE_COSYVOICE_WS_URL",
+        "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+    )
+
+    assert (
+        dashscope_cosyvoice_ws_url()
+        == "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
     )

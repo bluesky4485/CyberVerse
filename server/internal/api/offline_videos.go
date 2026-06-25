@@ -593,11 +593,14 @@ func (r *Router) offlineVideoTTSConfig(req *http.Request, ch *character.Characte
 		return inference.TTSConfig{SessionID: sessionID}, nil
 	}
 	provider := ""
+	model := ""
 	voice := ""
 	provider = strings.TrimSpace(req.FormValue("tts_provider"))
+	model = strings.TrimSpace(req.FormValue("tts_model"))
 	voice = strings.TrimSpace(req.FormValue("tts_voice"))
-	if provider == "" && voice == "" && ch != nil && ch.OfflineVideoTTS != nil {
+	if provider == "" && model == "" && voice == "" && ch != nil && ch.OfflineVideoTTS != nil {
 		provider = strings.TrimSpace(ch.OfflineVideoTTS.Provider)
+		model = strings.TrimSpace(ch.OfflineVideoTTS.Model)
 		voice = strings.TrimSpace(ch.OfflineVideoTTS.Voice)
 	}
 	if provider == "" {
@@ -611,6 +614,7 @@ func (r *Router) offlineVideoTTSConfig(req *http.Request, ch *character.Characte
 	}
 	return inference.TTSConfig{
 		Provider:  provider,
+		Model:     model,
 		Voice:     voice,
 		SessionID: sessionID,
 	}, nil

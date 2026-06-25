@@ -48,6 +48,7 @@ export interface BaiduXilingCharacterConfig {
 
 export interface OfflineVideoTTSConfig {
   provider: string
+  model?: string
   voice: string
 }
 
@@ -84,6 +85,7 @@ export interface CharacterComponents {
   llm: string
   asr: string
   tts: string
+  tts_model?: string
 }
 
 export interface ComponentOption {
@@ -215,6 +217,110 @@ export interface VoiceOption {
   label: string
   value: string
 }
+
+export const QWEN_TTS_MODEL_OPTIONS: VoiceOption[] = [
+  { label: 'qwen3-tts-flash-realtime', value: 'qwen3-tts-flash-realtime' },
+  { label: 'cosyvoice-v3-plus', value: 'cosyvoice-v3-plus' },
+  { label: 'cosyvoice-v3-flash', value: 'cosyvoice-v3-flash' },
+  { label: 'cosyvoice-v3.5-plus', value: 'cosyvoice-v3.5-plus' },
+  { label: 'cosyvoice-v3.5-flash', value: 'cosyvoice-v3.5-flash' },
+]
+
+export const COSYVOICE_V3_FLASH_VOICE_OPTIONS: VoiceOption[] = [
+  { label: '龙安洋 (longanyang)', value: 'longanyang' },
+  { label: '龙安欢（V3） (longanhuan_v3)', value: 'longanhuan_v3' },
+  { label: '龙安欢 (longanhuan)', value: 'longanhuan' },
+  { label: '龙呼呼 (longhuhu_v3)', value: 'longhuhu_v3' },
+  { label: '龙泡泡 (longpaopao_v3)', value: 'longpaopao_v3' },
+  { label: '龙杰力豆 (longjielidou_v3)', value: 'longjielidou_v3' },
+  { label: '龙仙 (longxian_v3)', value: 'longxian_v3' },
+  { label: '龙铃 (longling_v3)', value: 'longling_v3' },
+  { label: '龙闪闪 (longshanshan_v3)', value: 'longshanshan_v3' },
+  { label: '龙牛牛 (longniuniu_v3)', value: 'longniuniu_v3' },
+  { label: '龙嘉欣 (longjiaxin_v3)', value: 'longjiaxin_v3' },
+  { label: '龙嘉怡 (longjiayi_v3)', value: 'longjiayi_v3' },
+  { label: '龙安粤 (longanyue_v3)', value: 'longanyue_v3' },
+  { label: '龙老铁 (longlaotie_v3)', value: 'longlaotie_v3' },
+  { label: '龙陕哥 (longshange_v3)', value: 'longshange_v3' },
+  { label: '龙安闽 (longanmin_v3)', value: 'longanmin_v3' },
+  { label: 'loongkyong (loongkyong_v3)', value: 'loongkyong_v3' },
+  { label: 'Riko (loongriko_v3)', value: 'loongriko_v3' },
+  { label: 'loongtomoka (loongtomoka_v3)', value: 'loongtomoka_v3' },
+  { label: 'loongabby (loongabby_v3)', value: 'loongabby_v3' },
+  { label: 'loongandy (loongandy_v3)', value: 'loongandy_v3' },
+  { label: 'loongannie (loongannie_v3)', value: 'loongannie_v3' },
+  { label: 'loongava (loongava_v3)', value: 'loongava_v3' },
+  { label: 'loongbeth (loongbeth_v3)', value: 'loongbeth_v3' },
+  { label: 'loongbetty (loongbetty_v3)', value: 'loongbetty_v3' },
+  { label: 'loongcally (loongcally_v3)', value: 'loongcally_v3' },
+  { label: 'loongcindy (loongcindy_v3)', value: 'loongcindy_v3' },
+  { label: 'loongdavid (loongdavid_v3)', value: 'loongdavid_v3' },
+  { label: 'loongdonna (loongdonna_v3)', value: 'loongdonna_v3' },
+  { label: 'loongemily (loongemily_v3)', value: 'loongemily_v3' },
+  { label: 'loongeric (loongeric_v3)', value: 'loongeric_v3' },
+  { label: 'loongluna (loongluna_v3)', value: 'loongluna_v3' },
+  { label: 'loongluca (loongluca_v3)', value: 'loongluca_v3' },
+  { label: 'loongtomoya (loongtomoya_v3)', value: 'loongtomoya_v3' },
+  { label: 'Yuuna (loongyuuna_v3)', value: 'loongyuuna_v3' },
+  { label: 'Yuuma (loongyuuma_v3)', value: 'loongyuuma_v3' },
+  { label: 'Jihun (loongjihun_v3)', value: 'loongjihun_v3' },
+  { label: 'loongindah (loongindah_v3)', value: 'loongindah_v3' },
+  { label: '龙飞 (longfei_v3)', value: 'longfei_v3' },
+  { label: '龙应笑 (longyingxiao_v3)', value: 'longyingxiao_v3' },
+  { label: '龙应询 (longyingxun_v3)', value: 'longyingxun_v3' },
+  { label: '龙应静 (longyingjing_v3)', value: 'longyingjing_v3' },
+  { label: '龙应聆 (longyingling_v3)', value: 'longyingling_v3' },
+  { label: '龙应桃 (longyingtao_v3)', value: 'longyingtao_v3' },
+  { label: '龙小淳 (longxiaochun_v3)', value: 'longxiaochun_v3' },
+  { label: '龙小夏 (longxiaoxia_v3)', value: 'longxiaoxia_v3' },
+  { label: 'YUMI (longyumi_v3)', value: 'longyumi_v3' },
+  { label: '龙安昀 (longanyun_v3)', value: 'longanyun_v3' },
+  { label: '龙安温 (longanwen_v3)', value: 'longanwen_v3' },
+  { label: '龙安莉 (longanli_v3)', value: 'longanli_v3' },
+  { label: '龙安朗 (longanlang_v3)', value: 'longanlang_v3' },
+  { label: '龙应沐 (longyingmu_v3)', value: 'longyingmu_v3' },
+  { label: '龙安台 (longantai_v3)', value: 'longantai_v3' },
+  { label: '龙华 (longhua_v3)', value: 'longhua_v3' },
+  { label: '龙橙 (longcheng_v3)', value: 'longcheng_v3' },
+  { label: '龙泽 (longze_v3)', value: 'longze_v3' },
+  { label: '龙哲 (longzhe_v3)', value: 'longzhe_v3' },
+  { label: '龙颜 (longyan_v3)', value: 'longyan_v3' },
+  { label: '龙星 (longxing_v3)', value: 'longxing_v3' },
+  { label: '龙天 (longtian_v3)', value: 'longtian_v3' },
+  { label: '龙婉 (longwan_v3)', value: 'longwan_v3' },
+  { label: '龙嫱 (longqiang_v3)', value: 'longqiang_v3' },
+  { label: '龙菲菲 (longfeifei_v3)', value: 'longfeifei_v3' },
+  { label: '龙浩 (longhao_v3)', value: 'longhao_v3' },
+  { label: '龙安柔 (longanrou_v3)', value: 'longanrou_v3' },
+  { label: '龙寒 (longhan_v3)', value: 'longhan_v3' },
+  { label: '龙安智 (longanzhi_v3)', value: 'longanzhi_v3' },
+  { label: '龙安灵 (longanling_v3)', value: 'longanling_v3' },
+  { label: '龙安雅 (longanya_v3)', value: 'longanya_v3' },
+  { label: '龙安亲 (longanqin_v3)', value: 'longanqin_v3' },
+  { label: '龙妙 (longmiao_v3)', value: 'longmiao_v3' },
+  { label: '龙三叔 (longsanshu_v3)', value: 'longsanshu_v3' },
+  { label: '龙媛 (longyuan_v3)', value: 'longyuan_v3' },
+  { label: '龙悦 (longyue_v3)', value: 'longyue_v3' },
+  { label: '龙修 (longxiu_v3)', value: 'longxiu_v3' },
+  { label: '龙楠 (longnan_v3)', value: 'longnan_v3' },
+  { label: '龙安燃 (longanran_v3)', value: 'longanran_v3' },
+  { label: '龙婉君 (longwanjun_v3)', value: 'longwanjun_v3' },
+  { label: '龙逸尘 (longyichen_v3)', value: 'longyichen_v3' },
+  { label: '龙老伯 (longlaobo_v3)', value: 'longlaobo_v3' },
+  { label: '龙老姨 (longlaoyi_v3)', value: 'longlaoyi_v3' },
+  { label: '龙机器 (longjiqi_v3)', value: 'longjiqi_v3' },
+  { label: '龙猴哥 (longhouge_v3)', value: 'longhouge_v3' },
+  { label: '龙黛玉 (longdaiyu_v3)', value: 'longdaiyu_v3' },
+  { label: '龙安宣 (longanxuan_v3)', value: 'longanxuan_v3' },
+  { label: '龙硕 (longshuo_v3)', value: 'longshuo_v3' },
+  { label: '龙书 (longshu_v3)', value: 'longshu_v3' },
+  { label: 'Bella3.0 (loongbella_v3)', value: 'loongbella_v3' },
+]
+
+export const COSYVOICE_V3_PLUS_VOICE_OPTIONS: VoiceOption[] = [
+  { label: '龙安洋 (longanyang)', value: 'longanyang' },
+  { label: '龙安欢 (longanhuan)', value: 'longanhuan' },
+]
 
 // Aliyun Qwen TTS system voices — values match the voice request parameter.
 export const QWEN_TTS_VOICE_OPTIONS: VoiceOption[] = [

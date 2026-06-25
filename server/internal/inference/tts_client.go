@@ -3,9 +3,12 @@ package inference
 import (
 	"context"
 	"io"
+	"strings"
 
 	pb "github.com/cyberverse/server/internal/pb"
 )
+
+const ttsProviderModelMarker = "::model="
 
 // SynthesizeSpeechStream opens a bidirectional stream: sends text chunks,
 // receives audio chunks.
@@ -29,7 +32,7 @@ func (c *Client) SynthesizeSpeechStream(ctx context.Context, textCh <-chan strin
 			defer func() { _ = stream.CloseSend() }()
 			if err := stream.Send(&pb.TextChunk{
 				Config: &pb.TTSConfig{
-					Provider:      config.Provider,
+					Provider:      ttsProviderWithModel(config.Provider, config.Model),
 					Voice:         config.Voice,
 					SpeakingStyle: config.SpeakingStyle,
 					Language:      config.Language,
@@ -85,4 +88,13 @@ func (c *Client) SynthesizeSpeechStream(ctx context.Context, textCh <-chan strin
 	}()
 
 	return audioCh, errCh
+}
+
+func ttsProviderWithModel(provider string, model string) string {
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return provider
+	}
+	return provider + ttsProviderModelMarker + model
 }

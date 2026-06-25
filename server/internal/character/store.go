@@ -50,13 +50,15 @@ type Character struct {
 }
 
 type Components struct {
-	LLM string `json:"llm"`
-	ASR string `json:"asr"`
-	TTS string `json:"tts"`
+	LLM      string `json:"llm"`
+	ASR      string `json:"asr"`
+	TTS      string `json:"tts"`
+	TTSModel string `json:"tts_model,omitempty"`
 }
 
 type OfflineVideoTTS struct {
 	Provider string `json:"provider"`
+	Model    string `json:"model,omitempty"`
 	Voice    string `json:"voice"`
 }
 
@@ -113,6 +115,10 @@ func NormalizeComponents(components Components, defaults Components) Components 
 	if components.TTS == "" {
 		components.TTS = defaults.TTS
 	}
+	components.TTSModel = strings.TrimSpace(components.TTSModel)
+	if components.TTSModel == "" && components.TTS == defaults.TTS {
+		components.TTSModel = strings.TrimSpace(defaults.TTSModel)
+	}
 	return components
 }
 
@@ -152,11 +158,27 @@ func NormalizeOfflineVideoTTS(cfg *OfflineVideoTTS) *OfflineVideoTTS {
 	}
 	out := *cfg
 	out.Provider = strings.TrimSpace(out.Provider)
+	out.Model = strings.TrimSpace(out.Model)
 	out.Voice = strings.TrimSpace(out.Voice)
-	if out.Provider == "" && out.Voice == "" {
+	if out.Provider == "" && out.Model == "" && out.Voice == "" {
 		return nil
 	}
 	return &out
+}
+
+func defaultVoiceTypeForComponents(components Components) string {
+	if components.TTS != "qwen" {
+		return ""
+	}
+	model := strings.ToLower(strings.TrimSpace(components.TTSModel))
+	switch {
+	case strings.HasPrefix(model, "cosyvoice-v3.5-"):
+		return ""
+	case strings.HasPrefix(model, "cosyvoice-v3-"):
+		return "longanyang"
+	default:
+		return "Momo"
+	}
 }
 
 func normalizeAvatarFields(c *Character, fallback *Character) {
@@ -243,8 +265,8 @@ func (s *Store) Create(c *Character) (*Character, error) {
 	if c.VoiceProvider == "" {
 		c.VoiceProvider = c.Components.TTS
 	}
-	if c.VoiceType == "" && c.Components.TTS == "qwen" {
-		c.VoiceType = "Momo"
+	if c.VoiceType == "" {
+		c.VoiceType = defaultVoiceTypeForComponents(c.Components)
 	}
 
 	dirName := charDirName(c.Name, c.ID)
@@ -308,8 +330,8 @@ func (s *Store) Update(id string, c *Character) (*Character, error) {
 	if c.VoiceProvider == "" {
 		c.VoiceProvider = c.Components.TTS
 	}
-	if c.VoiceType == "" && c.Components.TTS == "qwen" {
-		c.VoiceType = "Momo"
+	if c.VoiceType == "" {
+		c.VoiceType = defaultVoiceTypeForComponents(c.Components)
 	}
 	// Preserve avatar_image if caller sent empty (e.g. frontend strips blob: URLs)
 	if c.AvatarImage == "" && existing.AvatarImage != "" {
@@ -741,8 +763,8 @@ func (s *Store) load() error {
 		if c.VoiceProvider == "" {
 			c.VoiceProvider = c.Components.TTS
 		}
-		if c.VoiceType == "" && c.Components.TTS == "qwen" {
-			c.VoiceType = "Momo"
+		if c.VoiceType == "" {
+			c.VoiceType = defaultVoiceTypeForComponents(c.Components)
 		}
 		s.chars[c.ID] = &c
 		s.dirNames[c.ID] = e.Name()
